@@ -181,6 +181,148 @@ class HourSeasonality(Strategy):
         return pos
 
 
+class WeeklyReversal(Strategy):
+    name = "weekly_reversal"
+    label = "Reversão semanal (contínua)"
+    description = "Posição = −retorno das últimas L horas dividido pela volatilidade do mesmo horizonte, limitado a ±1 (vende o que subiu na semana, compra o que caiu). Nasceu do painel de IC (H014) e foi registrada como H022."
+    param_space = {"lookback_h": [72, 168, 336], "mode": ["ls", "lo"], "scale": [1.0, 2.0]}
+    min_tf_minutes = 60
+    max_tf_minutes = 1440
+
+    def _bars(self, p, ctx):
+        return max(int(p["lookback_h"] * 60 / ctx.tf_minutes), 2)
+
+    def warmup(self, p):
+        return int(p["lookback_h"])   # em barras de 1 h, limite superior (conservador em timeframes maiores)
+
+    def positions(self, bars, p, ctx, fit_slice=None):
+        L = self._bars(p, ctx)
+        lp = np.log(bars["close"])
+        ret = lp - lp.shift(L)
+        vol = lp.diff().rolling(L).std() * np.sqrt(L)
+        zsc = (ret / vol).to_numpy()
+        pos = -np.clip(np.nan_to_num(zsc, nan=0.0) / float(p["scale"]), -1.0, 1.0)
+        if p["mode"] == "lo":
+            pos = np.maximum(pos, 0.0)
+        return pos
+
+
+def ladder_with_band(target: np.ndarray, band: float, ret: np.ndarray | None = None) -> np.ndarray:
+    """Transforma um alvo contínuo em 0..1 numa posição com banda de não-negociação.
+
+    - alvo <= 0: sai inteiro; alvo >= 1: entra inteiro (os extremos são exatos, por definição);
+    - no meio, só rebalanceia quando |alvo − peso atual| >= banda; entre rebalanceamentos o peso
+      fica parado (o motor cobra giro só nas mudanças, que é o que acontece de verdade);
+    - se `ret` é dado, o peso atual comparado com o alvo é o peso DERIVADO pelo retorno
+      (sem negociar, a fração do patrimônio em BTC sobe quando o BTC sobe).
+    """
+    n = len(target)
+    pos = np.zeros(n)
+    cur = 0.0
+    for t in range(n):
+        tg = target[t]
+        if np.isnan(tg):
+            pos[t] = cur
+            continue
+        held = cur
+        if ret is not None and cur > 0 and not np.isnan(ret[t]):
+            held = cur * (1.0 + ret[t]) / (1.0 + cur * ret[t])
+        if tg <= 0.0:
+            cur = 0.0
+        elif tg >= 1.0:
+            cur = 1.0
+        elif abs(tg - held) >= band:
+            cur = float(tg)
+        else:
+            cur = held            # não negocia: carrega o peso derivado
+        pos[t] = cur
+    return pos
+
+
+def _bars_per_day(ctx: Context) -> int:
+    return max(int(round(ctx.bars_per_day)), 1)
+
+
+class ValueLadder(Strategy):
+    name = "value_ladder"
+    label = "Escada de valor (média móvel)"
+    description = "Posição entre 0 e 1 em função do z-score do preço contra a média móvel: totalmente dentro abaixo de z_lo, totalmente fora acima de z_hi, linear no meio, com banda de não-negociação. Compra na baixa e descasca na alta, só-compra."
+    param_space = {"anchor_days": [50, 100], "zpair": ["-1/1", "-1.5/1.5", "-1/2"], "band": [0.1, 0.25]}
+    min_tf_minutes = 240
+
+    def warmup(self, p):
+        return int(p["anchor_days"])
+
+    def positions(self, bars, p, ctx, fit_slice=None):
+        N = int(p["anchor_days"]) * _bars_per_day(ctx)
+        lo, hi = (float(x) for x in p["zpair"].split("/"))
+        lp = np.log(bars["close"])
+        dev = lp - lp.rolling(N).mean()
+        zsc = (dev / dev.rolling(N).std()).to_numpy()
+        target = np.clip((hi - zsc) / (hi - lo), 0.0, 1.0)
+        return ladder_with_band(target, float(p["band"]), bars["close"].pct_change().to_numpy())
+
+
+class DrawdownLadder(Strategy):
+    name = "drawdown_ladder"
+    label = "Escada de queda (média na baixa, descasca na alta)"
+    description = "Compra em escada conforme a queda desde a máxima de N dias: fora na máxima, totalmente dentro quando a queda atinge dd_full, proporcional no meio; descasca conforme o preço recupera. Banda de não-negociação."
+    param_space = {"high_days": [90, 180], "dd_full": [0.2, 0.3, 0.5], "band": [0.1, 0.25]}
+    min_tf_minutes = 240
+
+    def warmup(self, p):
+        return int(p["high_days"])
+
+    def positions(self, bars, p, ctx, fit_slice=None):
+        N = int(p["high_days"]) * _bars_per_day(ctx)
+        dd = (1.0 - bars["close"] / bars["close"].rolling(N).max()).to_numpy()
+        target = np.clip(dd / float(p["dd_full"]), 0.0, 1.0)
+        return ladder_with_band(target, float(p["band"]), bars["close"].pct_change().to_numpy())
+
+
+class MvrvLadder(Strategy):
+    name = "mvrv_ladder"
+    label = "Escada de MVRV (on-chain, 2 dias de atraso)"
+    description = "Totalmente dentro quando o z-score de 365 dias do MVRV está abaixo de lo, fora acima de hi, linear no meio. Dado diário da CoinMetrics com 2 dias de defasagem (não é point-in-time). Só faz sentido para BTC."
+    param_space = {"lo": [-1.0, -1.5], "hi": [1.0, 1.5, 2.0], "band": [0.1, 0.25]}
+    min_tf_minutes = 240
+    _z_cache: pd.Series | None = None
+
+    def warmup(self, p):
+        return 0
+
+    def _z(self) -> pd.Series:
+        if MvrvLadder._z_cache is None:
+            from quantlab.research.signal_scan import load_coinmetrics
+            cm = load_coinmetrics()
+            m = cm["CapMVRVCur"]
+            zs = (m - m.rolling(365).mean()) / m.rolling(365).std()
+            zs.index = zs.index.tz_localize("UTC") + pd.Timedelta(days=2)
+            MvrvLadder._z_cache = zs
+        return MvrvLadder._z_cache
+
+    def positions(self, bars, p, ctx, fit_slice=None):
+        zs = self._z().reindex(bars.index, method="ffill").to_numpy()
+        lo, hi = float(p["lo"]), float(p["hi"])
+        target = np.clip((hi - zs) / (hi - lo), 0.0, 1.0)
+        target = np.where(np.isnan(zs), 0.0, target)   # sem dado on-chain (depois de 2026-05): fora
+        return ladder_with_band(target, float(p["band"]), bars["close"].pct_change().to_numpy())
+
+
+class ConstantMix(Strategy):
+    name = "constant_mix"
+    label = "Mistura constante com banda"
+    description = "Peso-alvo fixo em BTC (50% ou 75%), rebalanceado só quando o peso derivado pelo preço sai da banda: vende na alta e compra na baixa mecanicamente. Referência para medir se as escadas acrescentam algo além do prêmio de rebalanceamento."
+    is_benchmark = True
+    param_space = {"weight": [0.5, 0.75], "band": [0.05, 0.1, 0.2]}
+    min_tf_minutes = 240
+
+    def positions(self, bars, p, ctx, fit_slice=None):
+        target = np.full(len(bars), float(p["weight"]))
+        return ladder_with_band(target, float(p["band"]), bars["close"].pct_change().to_numpy())
+
+
 REGISTRY: dict[str, Strategy] = {s.name: s for s in (
-    BuyHold(), RandomEntry(), SmaCross(), TSMom(), Donchian(), BollingerMR(), RsiMR(), HourSeasonality(),
+    BuyHold(), RandomEntry(), SmaCross(), TSMom(), Donchian(), BollingerMR(), RsiMR(), HourSeasonality(), WeeklyReversal(),
+    ValueLadder(), DrawdownLadder(), MvrvLadder(), ConstantMix(),
 )}

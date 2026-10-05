@@ -10,7 +10,7 @@ import { Heatmap } from "../charts/Heatmap";
 import { cssColors } from "../theme";
 import { href } from "../router";
 
-const SCN: Scenario[] = ["otimista", "base", "pessimista"];
+const SCN_ALL: Scenario[] = ["otimista", "base", "pessimista", "maker"];
 const METRIC_ROWS: { k: keyof Detail["metrics"]["base"]; label: string; f: (v: number) => string; signed?: boolean }[] = [
   { k: "sharpe", label: "Sharpe (diário, anualizado)", f: (v) => num(v, 2), signed: true },
   { k: "sortino", label: "Sortino", f: (v) => num(v, 2), signed: true },
@@ -73,6 +73,10 @@ export function Strategy({ id, manifest, themeKey }: { id: string; manifest: Man
   if (err) return <div className="card"><div className="empty">{err}</div></div>;
   if (!d) return <div className="card"><div className="empty">carregando…</div></div>;
   const m = d.metrics.base;
+  const SCN = SCN_ALL.filter((s) => d.metrics[s]);
+  const scnHeader = (s: Scenario) => s === "maker"
+    ? <>maker <span className="muted">(taxa {num(manifest.maker_scenario?.fee_bps ?? 2, 0)} bps, entradas que fugiram &gt; {num(manifest.maker_scenario?.adverse_bps ?? 2, 0)} bps perdidas)</span></>
+    : <>{s} <span className="muted">({num(manifest.scenarios[s as "base"].round_trip_bps_fixed, 1)} bps ida e volta)</span></>;
   const chosen = [...new Set(d.params_by_fold.map((p) => paramsS(p)))];
 
   return (
@@ -100,6 +104,7 @@ export function Strategy({ id, manifest, themeKey }: { id: string; manifest: Man
         <Tile label="Trades OOS" value={int(m.n_trades)} delta={`${num(m.trades_per_year, 0)} por ano · acerto ${pct(m.win_rate, 0)}`} />
         <Tile label={manifest.null_kind === "shift" ? "p contra posições deslocadas" : "p contra entradas aleatórias"} value={num(d.null_p, 3)} delta={`${d.null.n_sims} simulações com a mesma exposição`} cls={d.null_p < 0.05 ? "pos" : ""} />
         <Tile label="Sharpe deflacionado (DSR)" value={num(d.dsr, 2)} delta={d.dsr_global != null ? `família: ${d.n_trials} tentativas · torneio inteiro (${d.n_trials_global}): ${num(d.dsr_global, 2)}` : `corrigido por ${d.n_trials} tentativas`} cls={d.dsr > 0.9 ? "pos" : ""} />
+        {d.sharpe_by_era && d.sharpe_by_era.length === 3 && <Tile label="Sharpe por era (3 terços)" value={d.sharpe_by_era.map((x) => num(x, 2)).join(" · ")} delta={d.era_ranges ? d.era_ranges.map((r) => r[0].slice(0, 4)).join(" / ") : ""} cls={d.sharpe_by_era.every((x) => x > 0) ? "pos" : "neg"} />}
         {d.fold_concentration != null && <Tile label="Retorno na melhor janela" value={pct(d.fold_concentration, 0)} delta={`sem a melhor janela: ${pct(d.oos_return_ex_best_fold)}${d.sharpe_ex_top5_days != null ? ` · Sharpe sem os 5 melhores dias: ${num(d.sharpe_ex_top5_days, 2)}` : ""}`} cls={d.fold_concentration > 0.6 ? "neg" : ""} />}
       </div>
 
@@ -145,10 +150,10 @@ export function Strategy({ id, manifest, themeKey }: { id: string; manifest: Man
 
       <div className="card">
         <h2>Três cenários de custo</h2>
-        <p className="sub">Mesmas posições, custos diferentes. Bruto no período: {pct(d.gross_total)}; custos pagos (base): {cost(d.cost_total)} do patrimônio.</p>
+        <p className="sub">Mesmas posições, custos diferentes. Bruto no período: {pct(d.gross_total)}; custos pagos (base): {cost(d.cost_total)} do patrimônio. A coluna maker usa ordem limitada na abertura e perde as entradas em que o preço fugiu: é o teste de seleção adversa do Berlekamp.</p>
         <div className="scroll">
           <table className="data">
-            <thead><tr><th className="left">Métrica</th>{SCN.map((s) => <th key={s}>{s} <span className="muted">({num(manifest.scenarios[s].round_trip_bps_fixed, 1)} bps ida e volta)</span></th>)}</tr></thead>
+            <thead><tr><th className="left">Métrica</th>{SCN.map((s) => <th key={s}>{scnHeader(s)}</th>)}</tr></thead>
             <tbody>
               {METRIC_ROWS.map((r) => <tr key={r.k}><td className="left">{r.label}</td>{SCN.map((s) => { const v = d.metrics[s][r.k] as number; return <td key={s} className={r.signed ? cls(v) : r.k === "max_drawdown" ? "neg" : ""}>{r.f(v)}</td>; })}</tr>)}
             </tbody>

@@ -55,7 +55,7 @@ export function Ranking({ rows, manifest }: { rows: Row[]; manifest: Manifest })
           <button className={`chip ${tf === "todos" ? "active" : ""}`} onClick={() => setTf("todos")}>todos</button>
           {manifest.tfs.map((t) => <button key={t} className={`chip ${tf === t ? "active" : ""}`} onClick={() => setTf(t)}>{TF_LABEL[t] ?? t}</button>)}
           <span className="muted">·</span>
-          {(["otimista", "base", "pessimista"] as Scenario[]).map((s) => <button key={s} className={`chip ${scn === s ? "active" : ""}`} onClick={() => setScn(s)}>custos: {s}</button>)}
+          {(["otimista", "base", "pessimista", "maker"] as Scenario[]).filter((s) => rows[0]?.metrics[s]).map((s) => <button key={s} className={`chip ${scn === s ? "active" : ""}`} onClick={() => setScn(s)}>custos: {s}</button>)}
           <span className="spacer" />
           <label className="toggle"><input type="checkbox" checked={!hideBench} onChange={(e) => setHideBench(!e.target.checked)} /> mostrar referências (comprar e segurar, aleatória)</label>
         </div>

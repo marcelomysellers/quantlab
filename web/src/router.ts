@@ -5,6 +5,7 @@ export type Route =
   | { page: "estrategia"; id: string }
   | { page: "duelo"; a?: string; b?: string }
   | { page: "timeframes" }
+  | { page: "sinais" }
   | { page: "metodo" };
 
 export function parseHash(): Route {
@@ -16,6 +17,7 @@ export function parseHash(): Route {
     case "estrategia": return { page: "estrategia", id: decodeURIComponent(parts[1] || "") };
     case "duelo": return { page: "duelo", a: q.get("a") || undefined, b: q.get("b") || undefined };
     case "timeframes": return { page: "timeframes" };
+    case "sinais": return { page: "sinais" };
     case "metodo": return { page: "metodo" };
     default: return { page: "ranking" };
   }
@@ -36,5 +38,6 @@ export const href = {
   estrategia: (id: string) => `#/estrategia/${encodeURIComponent(id)}`,
   duelo: (a?: string, b?: string) => `#/duelo${a || b ? `?${new URLSearchParams({ ...(a ? { a } : {}), ...(b ? { b } : {}) }).toString()}` : ""}`,
   timeframes: () => "#/timeframes",
+  sinais: () => "#/sinais",
   metodo: () => "#/metodo",
 };

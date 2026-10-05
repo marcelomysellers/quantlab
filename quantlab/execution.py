@@ -69,6 +69,7 @@ class FillModel:
     partial_min: float = 0.3
     limit_penetration_ticks: int = 1
     full_fill_ticks: int = 3
+    adverse_bps: float | None = None   # ordem limitada: entrada é perdida se a barra de entrada andou mais que isto A FAVOR (o preço fugiu do limite)
     seed: int = 0
 
 
@@ -119,5 +120,23 @@ def apply_fill_stress(pos: np.ndarray, fill: FillModel, rng: np.random.Generator
     mult[partial] = rng.uniform(fill.partial_min, 1.0, partial.sum())
     out = pos.copy()
     inpos = seg >= 0
+    out[inpos] = pos[inpos] * mult[seg[inpos]]
+    return out
+
+
+def drop_unfilled_limit_entries(pos: np.ndarray, o: np.ndarray, c: np.ndarray, adverse_bps: float) -> np.ndarray:
+    """Teste de seleção adversa de Berlekamp: uma ordem limitada colocada na abertura só executa se o
+    preço não fugir; se a barra de entrada andou mais que `adverse_bps` na direção do trade, a ordem
+    ficou para trás e o trade inteiro é perdido. As entradas que executam são justamente as que o
+    mercado andou contra: é o custo escondido do maker."""
+    starts, seg = trade_segments(pos)
+    if len(starts) == 0:
+        return pos
+    side = np.sign(pos[starts])
+    move = side * (c[starts] - o[starts]) / o[starts]
+    missed = move > adverse_bps / 1e4
+    out = pos.copy()
+    inpos = seg >= 0
+    mult = np.where(missed, 0.0, 1.0)
     out[inpos] = pos[inpos] * mult[seg[inpos]]
     return out

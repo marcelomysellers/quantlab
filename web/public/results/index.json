@@ -1,5 +1,35 @@
 [
  {
+  "id": "btc-bitstamp-reversao",
+  "symbol": "BTCUSD-BITSTAMP",
+  "instrument": "Bitcoin / USD (Bitstamp)",
+  "start": "2020-01-01",
+  "end": "2026-10-01",
+  "tfs": [
+   "1d",
+   "4h",
+   "1h"
+  ],
+  "generated_at": "2026-10-05T23:43:40.949103+00:00",
+  "method_version": 2,
+  "wf_mode": "best"
+ },
+ {
+  "id": "btc-binance-reversao",
+  "symbol": "BTCUSDT-BINANCE",
+  "instrument": "Bitcoin / USDT (Binance spot)",
+  "start": "2018-01-01",
+  "end": "2026-10-01",
+  "tfs": [
+   "1d",
+   "4h",
+   "1h"
+  ],
+  "generated_at": "2026-10-05T23:43:20.632505+00:00",
+  "method_version": 2,
+  "wf_mode": "best"
+ },
+ {
   "id": "btc-binance-2018-2026",
   "symbol": "BTCUSDT-BINANCE",
   "instrument": "Bitcoin / USDT (Binance spot)",

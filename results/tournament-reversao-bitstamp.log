@@ -1,0 +1,10 @@
+[ 1d] buy_hold           sharpe=+0.51 cagr=+13.9% mdd=-76.7% trades=    0 p_null=1.000 dsr=0.89 -> referencia (1.0s)
+[ 1d] random_entry       sharpe=-0.03 cagr=-7.9% mdd=-63.4% trades=   37 p_null=0.427 dsr=0.16 -> referencia (1.3s)
+[ 1d] weekly_reversal    sharpe=-0.02 cagr=-6.0% mdd=-61.7% trades=  349 p_null=0.520 dsr=0.03 -> reprovada (1.4s)
+[ 4h] buy_hold           sharpe=+0.51 cagr=+13.4% mdd=-77.1% trades=    0 p_null=1.000 dsr=0.88 -> referencia (1.3s)
+[ 4h] random_entry       sharpe=+0.23 cagr=+0.4% mdd=-73.3% trades=  200 p_null=0.193 dsr=0.36 -> referencia (1.9s)
+[ 4h] weekly_reversal    sharpe=-0.11 cagr=-6.5% mdd=-55.7% trades=  453 p_null=0.500 dsr=0.01 -> reprovada (2.4s)
+[ 1h] buy_hold           sharpe=+0.51 cagr=+13.6% mdd=-77.2% trades=    0 p_null=1.000 dsr=0.88 -> referencia (2.5s)
+[ 1h] random_entry       sharpe=-0.54 cagr=-26.9% mdd=-86.5% trades=  434 p_null=0.693 dsr=0.01 -> referencia (2.9s)
+[ 1h] weekly_reversal    sharpe=-0.45 cagr=-15.6% mdd=-68.8% trades=  776 p_null=0.623 dsr=0.00 -> reprovada (4.1s)
+torneio concluído em 19s -> /home/user/quant-lab/results/runs/btc-bitstamp-reversao

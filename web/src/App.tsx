@@ -8,6 +8,7 @@ import { Strategy } from "./pages/Strategy";
 import { Duel } from "./pages/Duel";
 import { Timeframes } from "./pages/Timeframes";
 import { Method } from "./pages/Method";
+import { Signals } from "./pages/Signals";
 
 export default function App() {
   const route = useRoute();
@@ -46,6 +47,7 @@ export default function App() {
           {tab("ranking", "Ranking", href.ranking())}
           {tab("timeframes", "Timeframes", href.timeframes())}
           {tab("duelo", "Duelo", href.duelo())}
+          {tab("sinais", "Sinais", href.sinais())}
           {tab("metodo", "Método", href.metodo())}
         </nav>
         <span className="spacer" />
@@ -64,6 +66,7 @@ export default function App() {
         {rows && manifest && route.page === "duelo" && <Duel key={runId} rows={rows} a={route.a} b={route.b} themeKey={theme} />}
         {rows && manifest && route.page === "timeframes" && <Timeframes rows={rows} manifest={manifest} themeKey={theme} />}
         {rows && manifest && route.page === "metodo" && <Method manifest={manifest} />}
+        {route.page === "sinais" && <Signals themeKey={theme} />}
       </main>
     </div>
   );

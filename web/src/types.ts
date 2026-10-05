@@ -1,4 +1,4 @@
-export type Scenario = "otimista" | "base" | "pessimista";
+export type Scenario = "otimista" | "base" | "pessimista" | "maker";
 export type Verdict = "aprovada" | "promissora" | "reprovada" | "referencia";
 
 export interface Metrics {
@@ -18,6 +18,7 @@ export interface Row {
   fold_returns: number[]; fold_sharpes: number[]; params_by_fold: (Record<string, unknown> | null)[];
   oos_range: [string, string]; spark: number[]; rank: number;
   fold_concentration?: number; oos_return_ex_best_fold?: number; dsr_global?: number; n_trials_global?: number; sharpe_ex_top5_days?: number;
+  sharpe_by_era?: number[]; era_ranges?: [string, string][];
 }
 
 export interface CurvePoint { t: number; eq: number; bh: number; dd: number; pess: number; opt: number; ov?: number }
@@ -44,6 +45,7 @@ export interface Manifest {
   wf: { train_months: number; test_months: number; min_trades: number; warmup_frac: number };
   scenarios: Record<Scenario, ScenarioSpec>; stress_model: { miss_prob: number; partial_prob: number; partial_min: number };
   n_null: number; n_stress: number; generated_at: string; elapsed_s: number; null_kind?: string; method_version?: number;
+  maker_scenario?: { fee_bps: number; adverse_bps: number; description: string };
   strategy_meta: Record<string, { label: string; description: string; is_benchmark: boolean; param_space: Record<string, unknown[]> }>;
 }
 export interface Duel {

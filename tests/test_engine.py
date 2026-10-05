@@ -37,7 +37,7 @@ def test_costs_charged_on_turnover():
     assert np.isclose(res.cost.sum(), 10 / 1e4)           # só a entrada
     flip = np.where(np.arange(len(bars)) % 2 == 0, 1.0, -1.0)
     res2 = run_backtest(bars, flip, em, 60)
-    assert np.isclose(res2.turnover[2:].mean(), 2.0)       # vira a cada barra
+    assert abs(res2.turnover[2:].mean() - 2.0) < 0.05      # vira a cada barra (o lado vendido deriva um pouco)
     assert res2.cost.sum() > 0.5                            # custo devora tudo
 
 
@@ -139,6 +139,24 @@ def test_daily_aggregation_skips_days_without_bars():
     idx = pd.to_datetime(["2024-01-01 10:00", "2024-01-01 11:00", "2024-01-04 10:00"], utc=True)
     d = aggregate_daily(np.array([0.01, 0.01, -0.02]), pd.DatetimeIndex(idx))
     assert len(d) == 2 and np.isclose(d.iloc[0], 1.01 ** 2 - 1)
+
+
+def test_drift_is_not_charged_but_maintenance_is():
+    """Comprado 100% não paga nada para manter; 50% constante paga a recompra/venda que mantém o peso."""
+    bars = synth_bars(300, seed=11)
+    em = ExecutionModel("c", fee_bps=10, spread_bps=0, slippage_bps=0, impact_k=0)
+    full = run_backtest(bars, np.ones(300), em, 60)
+    half = run_backtest(bars, np.full(300, 0.5), em, 60)
+    assert np.isclose(full.turnover[2:].sum(), 0.0)
+    assert half.turnover[2:].sum() > 0.0
+    # peso derivado informado pela estratégia: giro zero entre rebalanceamentos
+    pos = np.full(300, 0.5)
+    r = bars["open"].pct_change().shift(-1).fillna(0.0).to_numpy()   # retorno open->open da própria barra
+    for t in range(1, 300):
+        pos[t] = pos[t - 1] * (1 + r[t - 1]) / (1 + pos[t - 1] * r[t - 1])
+    target = np.concatenate((pos[1:], [pos[-1]]))   # o motor aplica 1 barra de atraso: alvo[t] = peso desejado em t+1
+    res = run_backtest(bars, target, em, 60)
+    assert res.turnover[3:].sum() < 1e-9
 
 
 def test_no_execution_on_synthetic_open():

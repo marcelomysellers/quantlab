@@ -24,7 +24,11 @@ quantlab/
     walkforward.py      janelas rolantes, seleção no treino, curva OOS costurada, curva de vitrine
   tournament.py         tudo x tudo, 3 cenários de custo, estresse de fills, duelos, JSON
   cli.py
-  research/signal_scan.py  IC por feature e horizonte, permutação circular, estabilidade por ano (mede sinais, não estratégias)
+  research/
+    signal_scan.py      IC diário on-chain (CoinMetrics), permutação circular, estabilidade por ano
+    ic_panel.py         painel de IC pré-registrado em barras de 1 h: BTC e painel de 10 ativos, treino/confirmação/cofre, BH-FDR
+    funding_study.py    funding do perpétuo como sinal, como carry e como custo
+    cross_section.py    carteira diária dólar-neutra e beta-neutra de altcoins contra BTC (resíduo), nulo embaralhado
 tests/test_engine.py    sanidade do motor + teste de lookahead de todas as estratégias
 web/                    frontend Vite + React + lightweight-charts
 results/runs/<id>/      saída de cada torneio (ignorado pelo git)
@@ -85,6 +89,16 @@ cd web && npm install && npm run dev      # http://localhost:5173
 - Abaixo de 1 hora, tudo morre no custo em qualquer período. Em 1 minuto, até entradas aleatórias perdem 99% do capital.
 - Sinais on-chain diários (CoinMetrics, 56 testes com defasagem de 2 dias): nada sobrevive a Bonferroni; o fluxo líquido para exchanges é o único com sinal consistente entre anos, e é fraco.
 - A conclusão do conselho está em `council/sessions/2026-10-05/ata.md`: o laboratório muda de "comparar estratégias" para "medir sinais e combinar", a coleta própria de dados começa antes de qualquer pesquisa nova, e nada do que existe é operável.
+
+## Pesquisa de sinais (o caminho que o conselho indicou)
+
+```bash
+python -m quantlab.research.ic_panel            # painel de IC: BTC + 10 ativos, grava research/painel_ic.md e a aba Sinais
+python -m quantlab.research.funding_study       # funding como sinal, carry e custo (precisa do funding em data/parquet)
+python -m quantlab.research.cross_section       # resíduo de altcoins contra BTC
+```
+
+Toda hipótese entra em `research/hipoteses.md` antes do teste, com critério de sucesso e de abandono; o resultado é registrado depois, inclusive quando morre.
 
 ## Adicionar uma estratégia
 

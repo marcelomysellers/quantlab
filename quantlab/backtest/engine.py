@@ -15,7 +15,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from quantlab.execution import ExecutionModel, FillModel, apply_fill_stress
+from quantlab.execution import ExecutionModel, FillModel, apply_fill_stress, drop_unfilled_limit_entries
 
 
 @dataclass
@@ -64,6 +64,8 @@ def run_backtest(bars: pd.DataFrame, target: np.ndarray, exec_model: ExecutionMo
             last_real = np.maximum.accumulate(np.where(~mask, np.arange(n), 0))
             pos = pos[last_real]
     if fill is not None:
+        if fill.adverse_bps is not None:
+            pos = drop_unfilled_limit_entries(pos, o, c, fill.adverse_bps)
         pos = apply_fill_stress(pos, fill, rng)
 
     r_oo = np.zeros(n)
@@ -73,8 +75,13 @@ def run_backtest(bars: pd.DataFrame, target: np.ndarray, exec_model: ExecutionMo
     prev_range[1:] = (h[:-1] - l[:-1]) / c[:-1]
     cost_bps_side = exec_model.cost_bps_per_side(prev_range, tf_minutes)
 
+    # peso que se teria na abertura de t SEM negociar: o peso anterior derivado pelo retorno da barra t-1.
+    # Comprado 100% não deriva (1 -> 1); 50% deriva com o preço; vendido 100% precisa de recompra.
     pos_prev = np.concatenate(([0.0], pos[:-1]))
-    turnover = np.abs(pos - pos_prev)
+    r_prev = np.concatenate(([0.0], r_oo[:-1]))
+    with np.errstate(divide="ignore", invalid="ignore"):
+        drift_prev = np.where(1.0 + pos_prev * r_prev != 0, pos_prev * (1.0 + r_prev) / (1.0 + pos_prev * r_prev), pos_prev)
+    turnover = np.abs(pos - drift_prev)
     cost = turnover * cost_bps_side / 1e4
     gross = pos * r_oo
     net = gross - cost
@@ -83,14 +90,15 @@ def run_backtest(bars: pd.DataFrame, target: np.ndarray, exec_model: ExecutionMo
     equity = np.cumprod(1.0 + net)
 
     if with_trades:
-        trades = extract_trades(bars.index, o, c, pos, gross, cost_bps_side, cost)
+        trades = extract_trades(bars.index, o, c, pos, gross, cost_bps_side, cost, drift_prev)
     else:
         trades = pd.DataFrame(columns=["entry_idx", "exit_idx", "entry_ts", "exit_ts", "side", "size", "bars", "entry_px", "exit_px", "ret_gross", "ret_net", "open"])
     return BacktestResult(bars.index, pos, gross, cost, net, turnover, equity, trades, cost_bps_side)
 
 
 def extract_trades(index: pd.DatetimeIndex, o: np.ndarray, c: np.ndarray, pos: np.ndarray,
-                   gross: np.ndarray, cost_bps_side: np.ndarray, cost: np.ndarray | None = None) -> pd.DataFrame:
+                   gross: np.ndarray, cost_bps_side: np.ndarray, cost: np.ndarray | None = None,
+                   drift_prev: np.ndarray | None = None) -> pd.DataFrame:
     """Um trade = trecho contínuo com posição de mesmo sinal. Entrada/saída na abertura.
     Custo do trade = abertura da posição + todo o giro dentro do trecho (mudanças de tamanho) +
     fechamento na barra seguinte ao trecho."""
@@ -103,6 +111,8 @@ def extract_trades(index: pd.DatetimeIndex, o: np.ndarray, c: np.ndarray, pos: n
     cum_gross = np.concatenate(([0.0], np.cumsum(gross)))
     if cost is None:
         cost = np.zeros(n)
+    if drift_prev is None:
+        drift_prev = np.concatenate(([0.0], pos[:-1]))
     cum_cost = np.concatenate(([0.0], np.cumsum(cost)))
     for i in range(len(change)):
         i0, i1 = bounds[i], bounds[i + 1]
@@ -112,12 +122,12 @@ def extract_trades(index: pd.DatetimeIndex, o: np.ndarray, c: np.ndarray, pos: n
         size = float(np.abs(pos[i0:i1]).mean())
         slip_in = cost_bps_side[i0] / 1e4
         entry_px = o[i0] * (1 + s * slip_in)
-        entry_cost = abs(pos[i0]) * slip_in                   # só a parte que ABRE esta posição
+        entry_cost = abs(pos[i0]) * slip_in                   # só a parte que ABRE esta posição (o giro de i0 pode incluir o fechamento da anterior)
         intra_cost = cum_cost[i1] - cum_cost[i0 + 1]          # mudanças de tamanho dentro do trecho
         if i1 < n:
             slip_out = cost_bps_side[i1] / 1e4
             exit_px = o[i1] * (1 - s * slip_out)
-            exit_cost = abs(pos[i1 - 1]) * slip_out           # só a parte que FECHA esta posição
+            exit_cost = abs(drift_prev[i1]) * slip_out        # fecha o peso DERIVADO que se tinha na abertura de i1
             still_open = False
         else:
             slip_out = cost_bps_side[-1] / 1e4

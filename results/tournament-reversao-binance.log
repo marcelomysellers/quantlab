@@ -1,0 +1,10 @@
+[ 1d] buy_hold           sharpe=+0.91 cagr=+44.6% mdd=-76.6% trades=    0 p_null=1.000 dsr=0.99 -> referencia (1.1s)
+[ 1d] random_entry       sharpe=+0.30 cagr=+2.6% mdd=-70.9% trades=   52 p_null=0.307 dsr=0.34 -> referencia (1.6s)
+[ 1d] weekly_reversal    sharpe=-0.03 cagr=-6.4% mdd=-62.0% trades=  484 p_null=0.680 dsr=0.02 -> reprovada (1.6s)
+[ 4h] buy_hold           sharpe=+0.91 cagr=+44.7% mdd=-77.0% trades=    0 p_null=1.000 dsr=0.99 -> referencia (1.5s)
+[ 4h] random_entry       sharpe=-0.57 cagr=-30.7% mdd=-96.1% trades=  177 p_null=0.893 dsr=0.00 -> referencia (2.0s)
+[ 4h] weekly_reversal    sharpe=-0.39 cagr=-18.2% mdd=-82.6% trades=  582 p_null=0.817 dsr=0.00 -> reprovada (3.0s)
+[ 1h] buy_hold           sharpe=+0.91 cagr=+44.5% mdd=-77.2% trades=    0 p_null=1.000 dsr=0.99 -> referencia (2.9s)
+[ 1h] random_entry       sharpe=-0.51 cagr=-26.8% mdd=-93.6% trades=  730 p_null=0.563 dsr=0.00 -> referencia (3.8s)
+[ 1h] weekly_reversal    sharpe=-0.62 cagr=-24.3% mdd=-88.5% trades=  959 p_null=0.887 dsr=0.00 -> reprovada (4.6s)
+torneio concluído em 23s -> /home/user/quant-lab/results/runs/btc-binance-reversao

@@ -39,3 +39,7 @@
 [ 1m] buy_hold           sharpe=-0.04 cagr=-27.7% mdd=-81.4% trades=    0 p_null=1.000 dsr=0.48 -> referencia (6.4s)
 [ 1m] random_entry       sharpe=-7.94 cagr=-99.6% mdd=-100.0% trades= 7418 p_null=0.580 dsr=0.00 -> referencia (20.4s)
 [ 1m] sma_cross          sharpe=-6.13 cagr=-96.6% mdd=-99.9% trades= 3656 p_null=1.000 dsr=0.00 -> reprovada (28.1s)
+[ 1m] tsmom              sharpe=-26.89 cagr=-100.0% mdd=-100.0% trades=34908 p_null=0.750 dsr=0.00 -> reprovada (54.6s)
+[ 1m] donchian           sharpe=-9.31 cagr=-99.8% mdd=-100.0% trades= 5491 p_null=1.000 dsr=0.00 -> reprovada (20.8s)
+[ 1m] bollinger_mr       sharpe=-14.43 cagr=-100.0% mdd=-100.0% trades= 7504 p_null=1.000 dsr=0.00 -> reprovada (25.3s)
+[ 1m] rsi_mr             sharpe=-14.35 cagr=-99.4% mdd=-100.0% trades= 4278 p_null=1.000 dsr=0.00 -> reprovada (18.8s)

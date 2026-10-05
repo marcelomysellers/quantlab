@@ -7,6 +7,8 @@ export function readTheme(): Theme {
     const t = localStorage.getItem("quantlab-theme");
     if (t === "dark" || t === "light") return t;
   } catch { /* storage pode não existir */ }
+  const host = document.documentElement.getAttribute("data-theme");
+  if (host === "dark" || host === "light") return host;
   return "dark";
 }
 

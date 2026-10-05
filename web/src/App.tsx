@@ -51,7 +51,7 @@ export default function App() {
         <span className="spacer" />
         {runs.length > 0 && (
           <select className="inline-select" value={runId} onChange={(e) => { setRunId(e.target.value); location.hash = href.ranking(); }} aria-label="torneio">
-            {runs.map((r) => <option key={r.id} value={r.id}>{r.instrument} · {r.start.slice(0, 4)}–{r.end.slice(0, 4)} · {r.tfs.join(" ")}</option>)}
+            {runs.map((r) => <option key={r.id} value={r.id}>{r.instrument} · {r.start.slice(0, 4)}–{r.end.slice(0, 4)} · {r.tfs.join(" ")}{r.wf_mode === "mean" ? " · média da grade" : ""} · método v{r.method_version ?? 1}</option>)}
           </select>
         )}
         <button className="ghost" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} aria-label="alternar tema">{theme === "dark" ? "☀ claro" : "☾ escuro"}</button>

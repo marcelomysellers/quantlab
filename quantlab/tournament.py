@@ -12,11 +12,11 @@ import pandas as pd
 
 from quantlab.backtest.engine import BacktestResult, aggregate_daily, run_backtest
 from quantlab.backtest.metrics import block_bootstrap_sharpe, dsr, max_drawdown, sharpe, summarize
-from quantlab.backtest.montecarlo import random_entry_null
+from quantlab.backtest.montecarlo import random_entry_null, shifted_null
 from quantlab.backtest.walkforward import WFConfig, WFResult, walk_forward
 from quantlab.data.store import load_bars
 from quantlab.execution import SCENARIOS, FillModel
-from quantlab.instruments import INSTRUMENTS, TF_MINUTES
+from quantlab.instruments import TF_MINUTES, get_instrument
 from quantlab.strategies import REGISTRY, Context
 
 STRESS = FillModel(miss_prob=0.05, partial_prob=0.30, partial_min=0.3)
@@ -66,7 +66,7 @@ def fold_concentration(fold_returns: list[float]) -> float:
 
 
 def verdict_for(m_base: dict, m_pess: dict, null_p: float, dsr_v: float, is_benchmark: bool,
-                concentration: float = 0.0, dsr_global: float | None = None) -> tuple[str, list[dict]]:
+                concentration: float = 0.0, dsr_global: float | None = None, sharpe_ex_top5: float | None = None) -> tuple[str, list[dict]]:
     checks = [
         {"id": "sharpe_pos", "label": "Sharpe OOS (base) > 0.5", "ok": m_base["sharpe"] > 0.5, "value": round(m_base["sharpe"], 2)},
         {"id": "null", "label": "Bate entradas aleatórias (p < 0.05)", "ok": null_p < 0.05, "value": round(null_p, 3)},
@@ -75,6 +75,9 @@ def verdict_for(m_base: dict, m_pess: dict, null_p: float, dsr_v: float, is_benc
         {"id": "trades", "label": "Pelo menos 30 trades OOS", "ok": m_base["n_trades"] >= 30, "value": m_base["n_trades"]},
         {"id": "conc", "label": "Nenhuma janela responde por mais de 60% do retorno", "ok": concentration <= 0.60, "value": round(concentration, 2)},
     ]
+    if sharpe_ex_top5 is not None:
+        checks.append({"id": "top5", "label": "Sharpe sem os 5 melhores dias > metade do Sharpe", "ok": sharpe_ex_top5 > 0.5 * m_base["sharpe"] and sharpe_ex_top5 > 0,
+                       "value": round(sharpe_ex_top5, 2)})
     if dsr_global is not None:
         checks.append({"id": "dsr_global", "label": "Sharpe deflacionado > 0.90 (todas as configurações do torneio)", "ok": dsr_global > 0.90, "value": round(dsr_global, 3)})
     if is_benchmark:
@@ -87,7 +90,7 @@ def verdict_for(m_base: dict, m_pess: dict, null_p: float, dsr_v: float, is_benc
 
 
 def evaluate_entry(strategy, bars: pd.DataFrame, ctx: Context, wf: WFResult, cfg: WFConfig,
-                   n_null: int, n_stress: int) -> tuple[dict, dict]:
+                   n_null: int, n_stress: int, days_per_year: float = 365.25) -> tuple[dict, dict]:
     tfm = ctx.tf_minutes
     region = slice(wf.oos_start, wf.oos_end)
     b = bars.iloc[region]
@@ -96,7 +99,7 @@ def evaluate_entry(strategy, bars: pd.DataFrame, ctx: Context, wf: WFResult, cfg
 
     res: dict[str, BacktestResult] = {k: run_backtest(b, tgt, em, tfm) for k, em in SCENARIOS.items()}
     daily = {k: aggregate_daily(r.net, idx) for k, r in res.items()}
-    metrics = {k: _clean(summarize(r.net, r.pos, r.turnover, ctx.bars_per_year, r.trades, daily[k])) for k, r in res.items()}
+    metrics = {k: _clean(summarize(r.net, r.pos, r.turnover, ctx.bars_per_year, r.trades, daily[k], days_per_year)) for k, r in res.items()}
     base, pess = res["base"], res["pessimista"]
     mb = metrics["base"]
 
@@ -107,7 +110,7 @@ def evaluate_entry(strategy, bars: pd.DataFrame, ctx: Context, wf: WFResult, cfg
     # referência comprado-e-segurar no mesmo trecho
     bh = run_backtest(b, np.ones(len(b)), SCENARIOS["base"], tfm)
     bh_daily = aggregate_daily(bh.net, idx)
-    bh_m = _clean(summarize(bh.net, bh.pos, bh.turnover, ctx.bars_per_year, bh.trades, bh_daily))
+    bh_m = _clean(summarize(bh.net, bh.pos, bh.turnover, ctx.bars_per_year, bh.trades, bh_daily, days_per_year))
 
     # curva de vitrine (melhor config escolhida olhando tudo)
     overfit_daily = None
@@ -115,9 +118,13 @@ def evaluate_entry(strategy, bars: pd.DataFrame, ctx: Context, wf: WFResult, cfg
         ov = run_backtest(b, wf.best_full_target[region], SCENARIOS["base"], tfm)
         overfit_daily = aggregate_daily(ov.net, idx)
 
-    # nulo: entradas aleatórias com a mesma exposição
+    # nulo: as próprias posições deslocadas no tempo (mesma exposição, mesmas durações)
     n_sims = n_null if len(b) < 600_000 else max(60, n_null // 3)
-    null = random_entry_null(b, base.trades, SCENARIOS["base"], tfm, mb["sharpe"], n_sims=n_sims)
+    null = shifted_null(b, tgt, SCENARIOS["base"], tfm, mb["sharpe"], n_sims=n_sims, min_shift=int(ctx.bars_per_day))
+
+    # Sharpe sem os 5 melhores dias: quanto do resultado é meia dúzia de dias
+    d_sorted = np.sort(daily["base"].to_numpy())
+    sharpe_ex_top5 = sharpe(d_sorted[:-5], 365.25) if len(d_sorted) > 30 else 0.0
 
     # estresse de execução: fills parciais e ordens perdidas
     stress = []
@@ -135,7 +142,7 @@ def evaluate_entry(strategy, bars: pd.DataFrame, ctx: Context, wf: WFResult, cfg
     ci_lo, ci_hi = block_bootstrap_sharpe(d, 365.25, n_boot=200)
 
     conc = fold_concentration([f.oos_return for f in wf.folds])
-    verdict, checks = verdict_for(mb, metrics["pessimista"], null["p_value"], dsr_v, strategy.is_benchmark, conc)
+    verdict, checks = verdict_for(mb, metrics["pessimista"], null["p_value"], dsr_v, strategy.is_benchmark, conc, None, sharpe_ex_top5)
 
     # séries para o frontend (resolução diária, base comum entre timeframes)
     eq = np.cumprod(1.0 + daily["base"].to_numpy())
@@ -187,7 +194,8 @@ def evaluate_entry(strategy, bars: pd.DataFrame, ctx: Context, wf: WFResult, cfg
         "null_p": null["p_value"], "null_mean": null.get("null_mean"), "null_p95": null.get("null_p95"),
         "dsr": dsr_v, "n_trials": n_trials, "sharpe_ci90": [ci_lo, ci_hi],
         "fold_concentration": conc, "oos_return_ex_best_fold": float(np.prod([1 + r for r in sorted([f.oos_return for f in wf.folds])[:-1]]) - 1) if len(wf.folds) > 1 else 0.0,
-        "_sr_bar": sr_bar, "_n_days": int(len(d)), "_config_sr": list(wf.config_sr_daily),
+        "sharpe_ex_top5_days": float(sharpe_ex_top5),
+        "_sr_bar": sr_bar, "_n_days": int(len(d)), "_config_sr": list(wf.config_sr_daily), "_null_sharpes": list(null["sharpes"]),
         "stress_sharpe_median": float(np.median([s["sharpe"] for s in stress])) if stress else None,
         "stress_sharpe_p10": float(np.percentile([s["sharpe"] for s in stress], 10)) if stress else None,
         "fold_returns": [f["oos_return"] for f in folds], "fold_sharpes": [f["oos_sharpe"] for f in folds],
@@ -245,7 +253,7 @@ def duels(details: dict[str, dict], top_ids: list[str]) -> list[dict]:
 def run_tournament(symbol: str, tfs: list[str], strategy_names: list[str], start: str, end: str,
                    cfg: WFConfig, out_dir: str, n_null: int = 300, n_stress: int = 40, log=print) -> dict:
     os.makedirs(os.path.join(out_dir, "entries"), exist_ok=True)
-    inst = INSTRUMENTS[symbol]
+    inst = get_instrument(symbol)
     rows, details = [], {}
     t_all = time.time()
     for tf in tfs:
@@ -257,7 +265,7 @@ def run_tournament(symbol: str, tfs: list[str], strategy_names: list[str], start
                 continue
             t0 = time.time()
             wf = walk_forward(strat, bars, ctx, SCENARIOS["base"], cfg)
-            row, detail = evaluate_entry(strat, bars, ctx, wf, cfg, n_null, n_stress)
+            row, detail = evaluate_entry(strat, bars, ctx, wf, cfg, n_null, n_stress, inst.trading_days_per_year)
             rows.append(row)
             details[row["id"]] = detail
             with open(os.path.join(out_dir, "entries", f"{row['id']}.json"), "w") as f:
@@ -270,16 +278,18 @@ def run_tournament(symbol: str, tfs: list[str], strategy_names: list[str], start
     # (todas as famílias e timeframes), com a variância dos Sharpes de todas elas.
     all_sr = [x for r in rows if not r["is_benchmark"] for x in r["_config_sr"]]
     n_total = max(len(all_sr), 1)
-    var_all = float(np.var(all_sr)) if len(all_sr) > 1 else 0.0
+    # variância dos Sharpes sob o nulo (deslocamentos), em unidades diárias: é o que o acaso produz
+    null_pool = [x / np.sqrt(365.25) for r in rows if not r["is_benchmark"] for x in r["_null_sharpes"]]
+    var_all = float(np.var(null_pool)) if len(null_pool) > 1 else (float(np.var(all_sr)) if len(all_sr) > 1 else 0.0)
     for r in rows:
         m = r["metrics"]["base"]
         r["dsr_global"] = dsr(r["_sr_bar"], r["_n_days"], m["skew"], m["kurtosis"], n_total, var_all)
         r["n_trials_global"] = n_total
         d = details[r["id"]]
         d["dsr_global"], d["n_trials_global"] = r["dsr_global"], n_total
-        verdict, checks = verdict_for(m, r["metrics"]["pessimista"], r["null_p"], r["dsr"], r["is_benchmark"], r["fold_concentration"], r["dsr_global"])
+        verdict, checks = verdict_for(m, r["metrics"]["pessimista"], r["null_p"], r["dsr"], r["is_benchmark"], r["fold_concentration"], r["dsr_global"], r.get("sharpe_ex_top5_days"))
         r["verdict"], d["verdict"], d["checks"] = verdict, verdict, checks
-        for k in ("_sr_bar", "_n_days", "_config_sr"):
+        for k in ("_sr_bar", "_n_days", "_config_sr", "_null_sharpes"):
             r.pop(k, None); d.pop(k, None)
         with open(os.path.join(out_dir, "entries", f"{r['id']}.json"), "w") as f:
             json.dump(d, f, default=_json_default)
@@ -293,7 +303,7 @@ def run_tournament(symbol: str, tfs: list[str], strategy_names: list[str], start
 
     manifest = {
         "symbol": symbol, "instrument": inst.name, "tfs": tfs, "strategies": strategy_names,
-        "start": start, "end": end, "wf": asdict(cfg),
+        "start": start, "end": end, "wf": asdict(cfg), "null_kind": "shift", "method_version": 2,
         "scenarios": {k: {"fee_bps": v.fee_bps, "spread_bps": v.spread_bps, "slippage_bps": v.slippage_bps,
                           "impact_k": v.impact_k, "lag_bars": v.lag_bars, "round_trip_bps_fixed": v.round_trip_bps_fixed(),
                           "description": v.description} for k, v in SCENARIOS.items()},

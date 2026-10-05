@@ -27,3 +27,5 @@
 [15m] donchian           sharpe=-1.11 cagr=-50.2% mdd=-98.5% trades= 1157 p_null=0.880 dsr=0.00 -> reprovada (7.2s)
 [15m] bollinger_mr       sharpe=-1.63 cagr=-56.4% mdd=-99.1% trades= 2264 p_null=0.790 dsr=0.00 -> reprovada (8.6s)
 [15m] rsi_mr             sharpe=-0.99 cagr=-21.8% mdd=-81.1% trades=  677 p_null=0.473 dsr=0.00 -> reprovada (6.2s)
+[15m] hour_seasonality   sharpe=-5.71 cagr=-69.2% mdd=-99.9% trades= 4108 p_null=0.663 dsr=0.00 -> reprovada (30.9s)
+torneio concluído em 169s -> /home/user/quant-lab/results/runs/btc-bitstamp-2020-2026

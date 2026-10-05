@@ -6,7 +6,8 @@ inicial usa o dataset Bitfinex 2013-2019. Na sua máquina:
     python -m quantlab.data.binance --symbol BTCUSDT --market um --start 2020-01 --end 2026-09
 
 Baixa klines mensais de 1 minuto (e funding rate, se market=um) e grava em
-data/parquet/{SYMBOL}_1m_raw.parquet no esquema padrão (index ts UTC | open high low close volume).
+data/parquet/{SYMBOL}-BINANCE-{MARKET}_1m_raw.parquet no esquema padrão (index ts UTC | open high low close volume)
+mais quote_volume, trades e taker_buy_base (fluxo de ordens), que o store soma ao reamostrar.
 """
 from __future__ import annotations
 
@@ -16,6 +17,7 @@ import os
 import zipfile
 from datetime import date
 
+import numpy as np
 import pandas as pd
 import requests
 
@@ -80,10 +82,13 @@ def fetch_klines(symbol: str, market: str, start: str, end: str, interval: str =
     if not frames:
         raise RuntimeError("nada baixado")
     df = pd.concat(frames, ignore_index=True)
-    unit = "us" if df["open_time"].iloc[-1] > 10**14 else "ms"
-    df["ts"] = pd.to_datetime(df["open_time"].astype("int64"), unit=unit, utc=True)
+    # a Binance trocou de milissegundos para microssegundos em 2025: decidir linha a linha
+    ot = df["open_time"].astype("int64")
+    ms = np.where(ot > 10**14, ot // 1000, ot)
+    df["ts"] = pd.to_datetime(ms, unit="ms", utc=True)
     df = df.drop_duplicates("ts").sort_values("ts").set_index("ts")
-    return df[["open", "high", "low", "close", "volume"]].astype(float)
+    cols = ["open", "high", "low", "close", "volume", "quote_volume", "trades", "taker_buy_base"]
+    return df[[c for c in cols if c in df]].astype(float)
 
 
 def fetch_funding(symbol: str, market: str, start: str, end: str) -> pd.DataFrame:
@@ -109,10 +114,10 @@ def main():
     ap.add_argument("--market", default="um", choices=["spot", "um", "cm"], help="spot, um (USDT-M perp) ou cm (coin-M)")
     ap.add_argument("--start", default="2020-01")
     ap.add_argument("--end", default=date.today().strftime("%Y-%m"))
-    ap.add_argument("--out-symbol", default=None, help="nome usado no parquet (padrão: BTCUSD para BTCUSDT)")
+    ap.add_argument("--out-symbol", default=None, help="nome usado no parquet (padrão: {SYMBOL}-BINANCE-{MARKET}, ex.: BTCUSDT-BINANCE-UM)")
     a = ap.parse_args()
     os.makedirs(OUT_DIR, exist_ok=True)
-    out_symbol = a.out_symbol or a.symbol.replace("USDT", "USD")
+    out_symbol = a.out_symbol or f"{a.symbol}-BINANCE-{a.market.upper()}"
     df = fetch_klines(a.symbol, a.market, a.start, a.end)
     out = os.path.join(OUT_DIR, f"{out_symbol}_1m_raw.parquet")
     df.to_parquet(out)

@@ -73,15 +73,18 @@ cd web && npm install && npm run dev      # http://localhost:5173
 2. **Custos antes de sinal.** Cada mudança de posição paga taxa + metade do spread + deslize fixo + deslize proporcional ao range da barra anterior. Três cenários: otimista, base, pessimista.
 3. **Execução realista.** Ordem a mercado executa inteira, no preço ruim. Ordem limitada só executa se o preço atravessa o limite (tocar não vale) e pode sair parcial (`limit_fill_fraction`). Cada estratégia ainda passa por um estresse com 5% de entradas perdidas e 30% de fills parciais (`FillModel`).
 4. **Walk-forward.** Treino de 12 meses, teste de 3, rolando. A configuração vencedora no treino é aplicada ao teste seguinte. Só a curva costurada dos testes conta; a "curva de vitrine" (melhor parâmetro olhando tudo) fica no gráfico para mostrar o tamanho do overfitting.
-5. **O nulo certo.** 300 estratégias sorteadas com o mesmo número de trades, durações, lado e custos. O p-valor é a fração que iguala ou supera o Sharpe real.
-6. **Contar as tentativas.** Sharpe deflacionado (Bailey & López de Prado, 2014) pelo tamanho da grade testada. Estatísticas em retornos diários, base comum entre timeframes.
-7. **Veredito.** Aprovada: Sharpe OOS > 0,5, p < 0,05, DSR > 0,90, Sharpe positivo no pessimista, 30+ trades. Promissora: Sharpe > 0, p < 0,15, 30+ trades. Reprovada: o resto.
+5. **O nulo certo.** 300 versões da própria estratégia com as posições deslocadas circularmente no tempo: mesma exposição, mesmos trades e durações, mesmos custos; só o alinhamento com o preço é destruído. O p-valor é a fração que iguala ou supera o Sharpe real.
+6. **Contar as tentativas.** Sharpe deflacionado (Bailey & López de Prado, 2014) pela grade da família e, no veredito, por TODAS as configurações do torneio com a variância do nulo. `research/hipoteses.md` registra cada hipótese testada; a contagem nunca diminui. Estatísticas em retornos diários, base comum entre timeframes.
+7. **Concentração.** Nenhuma janela pode responder por mais de 60% do lucro e o Sharpe sem os 5 melhores dias tem que ser mais da metade do Sharpe. O walk-forward pode rodar em modo `--wf-mode mean` (média da grade, sem seleção).
+8. **Veredito.** Aprovada: tudo acima mais Sharpe OOS > 0,5, p < 0,05, Sharpe positivo no pessimista, 30+ trades. Promissora: Sharpe > 0, p < 0,15, 30+ trades. Reprovada: o resto.
 
-## Resultado do primeiro torneio (BTC/USD, OOS 2018-2019)
+## Resultados até agora
 
-- Nenhuma estratégia aprovada. Duas promissoras: momentum de série temporal no diário (Sharpe 1,1; p = 0,08) e rompimento Donchian em 1 hora (Sharpe 0,8; p = 0,15). Ambas com poucos trades: não dá para operar com essa evidência.
-- Abaixo de 1 hora, tudo morre no custo. Em 1 minuto, até entradas aleatórias perdem 99% do capital, porque uma estratégia que gira milhares de vezes por ano paga milhares de vezes 14 bps.
-- As reversões à média (Bollinger, RSI) perderam em todos os timeframes num período de tendência forte. Sazonalidade por hora não sobrevive fora da amostra em nenhum timeframe.
+- **Bitfinex, OOS 2018-2019 (método v1):** nenhuma aprovada; momentum diário (Sharpe 1,1) e Donchian 1 hora (0,8) pareceram promissoras. O conselho mostrou que todo o lucro vinha de abril a junho de 2019.
+- **Bitstamp, OOS 2021-2026:** as duas "promissoras" deram Sharpe 0,03 e CAGR −11%. Morreram fora da amostra, como previsto.
+- Abaixo de 1 hora, tudo morre no custo em qualquer período. Em 1 minuto, até entradas aleatórias perdem 99% do capital.
+- Sinais on-chain diários (CoinMetrics, 56 testes com defasagem de 2 dias): nada sobrevive a Bonferroni; o fluxo líquido para exchanges é o único com sinal consistente entre anos, e é fraco.
+- A conclusão do conselho está em `council/sessions/2026-10-05/ata.md`: o laboratório muda de "comparar estratégias" para "medir sinais e combinar", a coleta própria de dados começa antes de qualquer pesquisa nova, e nada do que existe é operável.
 
 ## Adicionar uma estratégia
 

@@ -5,7 +5,9 @@ p-valor por permutação circular (preserva a autocorrelação da feature), IC p
 (estabilidade), consistência de sinal entre anos e spread entre quintis extremos.
 
 Alinhamento sem lookahead: a feature do dia t usa dados até o fechamento de t; o retorno
-futuro é medido de t+1 a t+1+h (entra-se no primeiro preço disponível depois do sinal).
+futuro é medido de t+LAG a t+LAG+h. LAG = 2 porque o diário da CoinMetrics fecha 27 a 30 horas
+depois das 00:00 UTC e a história é recalculada (não é point-in-time): usar o dado do dia t no
+dia t+1 seria lookahead.
 """
 from __future__ import annotations
 
@@ -18,6 +20,7 @@ from scipy import stats
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 HORIZONS = (1, 5, 10, 21)
+LAG = 2
 
 
 def zscore(s: pd.Series, window: int) -> pd.Series:
@@ -59,7 +62,7 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
 
 def forward_returns(price: pd.Series, horizons=HORIZONS) -> pd.DataFrame:
     lp = np.log(price)
-    return pd.DataFrame({f"fwd_{h}d": lp.shift(-(h + 1)) - lp.shift(-1) for h in horizons}, index=price.index)
+    return pd.DataFrame({f"fwd_{h}d": lp.shift(-(h + LAG)) - lp.shift(-LAG) for h in horizons}, index=price.index)
 
 
 def ic(x: np.ndarray, y: np.ndarray) -> float:
@@ -118,6 +121,7 @@ def scan(features: pd.DataFrame, fwd: pd.DataFrame, start: str, end: str, n_perm
 
 def to_markdown(res: pd.DataFrame, start: str, end: str, n_tests: int) -> str:
     lines = [f"# Varredura de sinais on-chain e de preço (BTC, diário, {start} a {end})", "",
+             f"Defasagem de {LAG} dias entre o dado e a primeira exposição (CoinMetrics não é point-in-time).", "",
              f"{n_tests} testes (features × horizontes). Ao nível de 5%, esperam-se ~{n_tests * 0.05:.1f} falsos positivos por acaso; "
              "só vale olhar o que tem p < 0,01, consistência de sinal entre anos e spread que pague custo.", "",
              "| feature | horizonte | IC | p (perm.) | consistência entre anos | spread Q5−Q1 | IC por ano |", "|---|---|---|---|---|---|---|"]

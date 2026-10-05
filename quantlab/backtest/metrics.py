@@ -83,7 +83,7 @@ def block_bootstrap_sharpe(r: np.ndarray, periods_per_year: float, n_boot: int =
 
 
 def summarize(net: np.ndarray, pos: np.ndarray, turnover: np.ndarray, bars_per_year: float,
-              trades: pd.DataFrame | None = None, daily: pd.Series | None = None) -> dict:
+              trades: pd.DataFrame | None = None, daily: pd.Series | None = None, days_per_year: float = 365.25) -> dict:
     """Resumo completo. Sharpe/Sortino/PSR/t-stat são calculados nos retornos DIÁRIOS
     (base comum entre timeframes); o restante nas barras."""
     net = np.asarray(net, dtype=float)
@@ -100,7 +100,7 @@ def summarize(net: np.ndarray, pos: np.ndarray, turnover: np.ndarray, bars_per_y
     mdd, _, _ = max_drawdown(equity)
 
     d = daily.to_numpy(dtype=float) if daily is not None else net
-    ppy = 365.25 if daily is not None else bars_per_year
+    ppy = days_per_year if daily is not None else bars_per_year
     sr_ann = sharpe(d, ppy)
     sr_bar = float(np.mean(d) / np.std(d, ddof=1)) if len(d) > 2 and np.std(d, ddof=1) > 0 else 0.0
     skew = float(stats.skew(d)) if len(d) > 3 else 0.0

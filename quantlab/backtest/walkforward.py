@@ -26,6 +26,7 @@ class WFConfig:
     test_months: int = 3
     min_trades: int = 10
     warmup_frac: float = 1.0 / 3.0
+    mode: str = "best"   # "best": melhor configuração do treino; "mean": média das posições de toda a grade (sem seleção)
 
 
 @dataclass
@@ -117,6 +118,9 @@ def walk_forward(strategy: Strategy, bars: pd.DataFrame, ctx: Context, exec_mode
             full[ci] = (cache[ci][0], cache[ci][1])
     config_sr_daily = [_sr_daily(full[ci][1], index, slice(0, n), annualize=False) for ci in range(len(configs))]
 
+    if cfg.mode == "mean":
+        return _walk_forward_mean(strategy, bars, ctx, exec_model, cfg, folds, configs, cache, full, config_sr_daily)
+
     for f in folds:
         a, b = f.i_train
         c, d = f.i_test
@@ -166,4 +170,50 @@ def walk_forward(strategy: Strategy, bars: pd.DataFrame, ctx: Context, exec_mode
         _, ci = max(full_scores)
         best_full_params, best_full_target = configs[ci], full[ci][0]
 
+    return WFResult(folds, oos_start, oos_end, oos_target, configs, config_sr_daily, best_full_params, best_full_target)
+
+
+def _walk_forward_mean(strategy, bars, ctx, exec_model, cfg, folds, configs, cache, full, config_sr_daily) -> WFResult:
+    """Sem seleção: a posição-alvo é a média das posições de todas as configurações cujo warmup cabe
+    no treino. Troca a escolha de um máximo sobre ruído (Mercer, Berlekamp) por um ensemble."""
+    index, n = bars.index, len(bars)
+    oos_target = np.zeros(n)
+    max_warm0 = int((folds[0].i_train[1] - folds[0].i_train[0]) * cfg.warmup_frac)
+    valid = [ci for ci, p in enumerate(configs) if strategy.warmup(p) <= max_warm0]
+    if not valid:
+        valid = list(range(len(configs)))
+    label = {"mode": f"média de {len(valid)} configurações"}
+    if not strategy.needs_fit:
+        mean_target = np.mean([cache[ci][0] for ci in valid], axis=0)
+        res = run_backtest(bars, mean_target, exec_model, ctx.tf_minutes, with_trades=True)
+        for f in folds:
+            a, b = f.i_train
+            c, d = f.i_test
+            f.params = label
+            f.n_configs = len(valid)
+            f.n_trades_is = int(((res.trades["entry_idx"] >= a) & (res.trades["entry_idx"] < b)).sum()) if len(res.trades) else 0
+            f.is_sharpe = float(_sr_daily(res.net, index, slice(a, b)))
+            f.oos_sharpe = float(_sr_daily(res.net, index, slice(c, d)))
+            f.oos_return = float(np.prod(1.0 + res.net[c:d]) - 1.0)
+            f.table = [{"params": configs[ci], "is_sharpe": round(_sr_daily(cache[ci][1], index, slice(a, b)), 3),
+                        "oos_sharpe": round(_sr_daily(cache[ci][1], index, slice(c, d)), 3), "n_trades_is": 0} for ci in valid]
+            oos_target[c:d] = mean_target[c:d]
+    else:
+        for f in folds:
+            a, b = f.i_train
+            c, d = f.i_test
+            tgts = [strategy.positions(bars, configs[ci], ctx, fit_slice=slice(a, b)) for ci in valid]
+            mean_target = np.mean(tgts, axis=0)
+            res = run_backtest(bars, mean_target, exec_model, ctx.tf_minutes, with_trades=False)
+            f.params, f.n_configs = label, len(valid)
+            f.is_sharpe = float(_sr_daily(res.net, index, slice(a, b)))
+            f.oos_sharpe = float(_sr_daily(res.net, index, slice(c, d)))
+            f.oos_return = float(np.prod(1.0 + res.net[c:d]) - 1.0)
+            oos_target[c:d] = mean_target[c:d]
+    oos_start, oos_end = folds[0].i_test[0], folds[-1].i_test[1]
+    best_full_params, best_full_target = None, None
+    full_scores = [(_sr_daily(full[ci][1], index, slice(oos_start, oos_end)), ci) for ci in valid]
+    if full_scores:
+        _, ci = max(full_scores)
+        best_full_params, best_full_target = configs[ci], full[ci][0]
     return WFResult(folds, oos_start, oos_end, oos_target, configs, config_sr_daily, best_full_params, best_full_target)

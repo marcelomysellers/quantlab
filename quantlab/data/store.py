@@ -16,6 +16,8 @@ from quantlab.instruments import PANDAS_RULE, TF_MINUTES
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 PARQUET_DIR = os.path.join(ROOT, "data", "parquet")
+CACHE_VERSION = 2          # muda quando o esquema das barras derivadas muda
+EXTRA_SUM_COLS = ("taker_buy_base", "trades", "quote_volume")
 
 
 def raw_path(symbol: str) -> str:
@@ -38,14 +40,22 @@ def regularize_1m(raw: pd.DataFrame) -> pd.DataFrame:
     for c in ("open", "high", "low"):
         df[c] = df[c].where(~synthetic, df["close"])
     df["volume"] = df["volume"].fillna(0.0)
+    for c in EXTRA_SUM_COLS:
+        if c in df:
+            df[c] = df[c].fillna(0.0)
     df["synthetic"] = synthetic.values
     df.index.name = "ts"
     return df
 
 
+def _cache_valid(cache_path: str, source_path: str) -> bool:
+    """Cache vale se existe e é mais novo que a fonte (trocou a fonte, refaz)."""
+    return os.path.exists(cache_path) and os.path.getmtime(cache_path) >= os.path.getmtime(source_path)
+
+
 def load_1m(symbol: str) -> pd.DataFrame:
-    p = os.path.join(PARQUET_DIR, f"{symbol}_1m.parquet")
-    if os.path.exists(p):
+    p = os.path.join(PARQUET_DIR, f"{symbol}_1m_v{CACHE_VERSION}.parquet")
+    if _cache_valid(p, raw_path(symbol)):
         return pd.read_parquet(p)
     df = regularize_1m(load_raw_1m(symbol))
     df.to_parquet(p)
@@ -54,12 +64,20 @@ def load_1m(symbol: str) -> pd.DataFrame:
 
 def resample(df1m: pd.DataFrame, tf: str) -> pd.DataFrame:
     if tf == "1m":
-        return df1m
+        out = df1m.copy()
+        if "synthetic" in out:
+            out["open_synthetic"] = out["synthetic"]
+        return out
     rule = PANDAS_RULE[tf]
     agg = {"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}
+    for c in EXTRA_SUM_COLS:
+        if c in df1m:
+            agg[c] = "sum"
     out = df1m.resample(rule, label="left", closed="left").agg(agg)
     if "synthetic" in df1m:
-        out["synthetic"] = df1m["synthetic"].resample(rule, label="left", closed="left").min().astype(bool)
+        syn = df1m["synthetic"].resample(rule, label="left", closed="left")
+        out["synthetic"] = syn.min().astype(bool)          # barra inteira sem negócio
+        out["open_synthetic"] = syn.first().astype(bool)   # a ABERTURA não existiu: proibido executar nela
     out = out.dropna(subset=["close"])
     out.index.name = "ts"
     return out
@@ -68,8 +86,8 @@ def resample(df1m: pd.DataFrame, tf: str) -> pd.DataFrame:
 def load_bars(symbol: str, tf: str, start: str | None = None, end: str | None = None) -> pd.DataFrame:
     if tf not in TF_MINUTES:
         raise ValueError(f"timeframe desconhecido: {tf}")
-    p = os.path.join(PARQUET_DIR, f"{symbol}_{tf}.parquet")
-    if os.path.exists(p):
+    p = os.path.join(PARQUET_DIR, f"{symbol}_{tf}_v{CACHE_VERSION}.parquet")
+    if _cache_valid(p, raw_path(symbol)):
         df = pd.read_parquet(p)
     else:
         df = resample(load_1m(symbol), tf)

@@ -98,9 +98,9 @@ export function Strategy({ id, manifest, themeKey }: { id: string; manifest: Man
         <Tile label="CAGR" value={pct(m.cagr)} delta={`comprar e segurar: ${pct(d.bh.cagr)}`} cls={cls(m.cagr)} />
         <Tile label="Drawdown máximo" value={pct(m.max_drawdown)} delta={`comprar e segurar: ${pct(d.bh.max_drawdown)}`} cls="neg" />
         <Tile label="Trades OOS" value={int(m.n_trades)} delta={`${num(m.trades_per_year, 0)} por ano · acerto ${pct(m.win_rate, 0)}`} />
-        <Tile label="p contra entradas aleatórias" value={num(d.null_p, 3)} delta={`${d.null.n_sims} simulações com a mesma exposição`} cls={d.null_p < 0.05 ? "pos" : ""} />
+        <Tile label={manifest.null_kind === "shift" ? "p contra posições deslocadas" : "p contra entradas aleatórias"} value={num(d.null_p, 3)} delta={`${d.null.n_sims} simulações com a mesma exposição`} cls={d.null_p < 0.05 ? "pos" : ""} />
         <Tile label="Sharpe deflacionado (DSR)" value={num(d.dsr, 2)} delta={d.dsr_global != null ? `família: ${d.n_trials} tentativas · torneio inteiro (${d.n_trials_global}): ${num(d.dsr_global, 2)}` : `corrigido por ${d.n_trials} tentativas`} cls={d.dsr > 0.9 ? "pos" : ""} />
-        {d.fold_concentration != null && <Tile label="Retorno na melhor janela" value={pct(d.fold_concentration, 0)} delta={`sem a melhor janela: ${pct(d.oos_return_ex_best_fold)}`} cls={d.fold_concentration > 0.6 ? "neg" : ""} />}
+        {d.fold_concentration != null && <Tile label="Retorno na melhor janela" value={pct(d.fold_concentration, 0)} delta={`sem a melhor janela: ${pct(d.oos_return_ex_best_fold)}${d.sharpe_ex_top5_days != null ? ` · Sharpe sem os 5 melhores dias: ${num(d.sharpe_ex_top5_days, 2)}` : ""}`} cls={d.fold_concentration > 0.6 ? "neg" : ""} />}
       </div>
 
       <div className="card">
@@ -130,8 +130,10 @@ export function Strategy({ id, manifest, themeKey }: { id: string; manifest: Man
 
       <div className="grid2">
         <div className="card">
-          <h2>Contra entradas aleatórias</h2>
-          <p className="sub">{d.null.n_sims} estratégias sorteadas com o mesmo número de trades, as mesmas durações e os mesmos custos. p = {num(d.null_p, 3)}: fração que iguala ou supera o Sharpe real.</p>
+          <h2>{manifest.null_kind === "shift" ? "Contra as próprias posições deslocadas no tempo" : "Contra entradas aleatórias"}</h2>
+          <p className="sub">{manifest.null_kind === "shift"
+            ? `${d.null.n_sims} deslocamentos circulares da série de posições: mesma exposição, mesmos trades e durações, só o alinhamento com o preço é destruído. p = ${num(d.null_p, 3)}: fração que iguala ou supera o Sharpe real.`
+            : `${d.null.n_sims} estratégias sorteadas com o mesmo número de trades, as mesmas durações e os mesmos custos. p = ${num(d.null_p, 3)}: fração que iguala ou supera o Sharpe real.`}</p>
           <Histogram values={d.null.sharpes} marker={d.null.actual} markerLabel="real" xLabel="Sharpe das simulações" />
         </div>
         <div className="card">

@@ -1,6 +1,6 @@
 import type { Detail, Duel, Manifest, Row } from "./types";
 
-export interface RunInfo { id: string; symbol: string; instrument: string; start: string; end: string; tfs: string[]; generated_at: string }
+export interface RunInfo { id: string; symbol: string; instrument: string; start: string; end: string; tfs: string[]; generated_at: string; method_version?: number; wf_mode?: string }
 
 const root = `${import.meta.env.BASE_URL}results/`;
 const cache = new Map<string, Promise<unknown>>();

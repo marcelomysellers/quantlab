@@ -108,6 +108,48 @@ def test_daily_aggregation():
     assert len(d) == 2 and np.isclose(d.iloc[0], (1.001 ** 24) - 1)
 
 
+def test_fit_strategies_do_not_peek_past_train_window():
+    """Mudar o TESTE não pode mudar o que a estratégia com ajuste aprendeu no TREINO."""
+    bars = synth_bars(1500, seed=5)
+    ctx = Context("1h", 60, 8766.0, 24.0)
+    for name, strat in REGISTRY.items():
+        if not strat.needs_fit or not strat.supports(ctx):
+            continue
+        params = strat.grid(ctx)[0]
+        a = strat.positions(bars, params, ctx, fit_slice=slice(0, 1000))
+        bars2 = bars.copy()
+        bars2.iloc[1000:, bars2.columns.get_loc("open")] *= 1.3   # altera só o teste
+        b = strat.positions(bars2, params, ctx, fit_slice=slice(0, 1000))
+        assert np.allclose(a, b), f"{name} aprende com dados do teste"
+
+
+def test_trade_costs_add_up():
+    """Soma dos resultados líquidos por trade = retorno líquido total (sem posição aberta no fim)."""
+    bars = synth_bars(400, seed=7)
+    rng = np.random.default_rng(1)
+    target = np.where(rng.random(400) < 0.1, rng.choice([-1.0, 0.0, 0.5, 1.0], 400), np.nan)
+    target = pd.Series(target).ffill().fillna(0.0).to_numpy().copy()
+    target[-5:] = 0.0
+    res = run_backtest(bars, target, SCENARIOS["pessimista"], 60)
+    assert np.isclose(res.trades["ret_net"].sum(), res.net.sum(), atol=1e-9)
+    assert np.isclose(res.trades["ret_gross"].sum(), res.gross.sum(), atol=1e-9)
+
+
+def test_daily_aggregation_skips_days_without_bars():
+    idx = pd.to_datetime(["2024-01-01 10:00", "2024-01-01 11:00", "2024-01-04 10:00"], utc=True)
+    d = aggregate_daily(np.array([0.01, 0.01, -0.02]), pd.DatetimeIndex(idx))
+    assert len(d) == 2 and np.isclose(d.iloc[0], 1.01 ** 2 - 1)
+
+
+def test_no_execution_on_synthetic_open():
+    bars = synth_bars(50)
+    bars["open_synthetic"] = False
+    bars.iloc[10:13, bars.columns.get_loc("open_synthetic")] = True
+    target = np.zeros(50); target[9:] = 1.0
+    res = run_backtest(bars, target, ZERO, 60)
+    assert res.pos[10] == 0 and res.pos[11] == 0 and res.pos[12] == 0 and res.pos[13] == 1
+
+
 if __name__ == "__main__":
     import sys
     g = dict(globals())

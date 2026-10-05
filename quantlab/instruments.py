@@ -83,3 +83,11 @@ BTCUSDT_BINANCE = Instrument(
 )
 
 INSTRUMENTS = {i.symbol: i for i in (BTCUSD, BTCUSD_BITSTAMP, BTCUSDT_BINANCE, WIN)}
+
+
+def get_instrument(symbol: str) -> Instrument:
+    """Instrumento registrado ou, para símbolos cripto desconhecidos (ex.: ETHUSDT-BINANCE-UM), um 24/7 padrão."""
+    if symbol in INSTRUMENTS:
+        return INSTRUMENTS[symbol]
+    from dataclasses import replace
+    return replace(BTCUSD, symbol=symbol, name=symbol)

@@ -37,13 +37,16 @@ class RandomEntry(Strategy):
         rng_start = np.random.default_rng(base)
         rng_side = np.random.default_rng(base + 1)
         p = expo / (hold * (1.0 - expo))
-        starts = rng_start.random(n) < p
-        sides = rng_side.choice([-1.0, 1.0], n)
-        idx = np.where(starts, np.arange(n), -1)
-        last = np.maximum.accumulate(idx)
-        side_last = pd.Series(np.where(starts, sides, np.nan)).ffill().fillna(0.0).to_numpy()
-        active = (last >= 0) & ((np.arange(n) - last) < hold)
-        return np.where(active, side_last, 0.0)
+        cand = np.flatnonzero(rng_start.random(n) < p)
+        sides = rng_side.choice([-1.0, 1.0], len(cand))
+        pos = np.zeros(n)
+        busy_until = -1
+        for s_i, side in zip(cand, sides):
+            if s_i < busy_until:          # já está dentro de um trade: não sobrepõe nem vira
+                continue
+            pos[s_i: s_i + hold] = side
+            busy_until = s_i + hold
+        return pos
 
 
 class SmaCross(Strategy):
@@ -161,7 +164,10 @@ class HourSeasonality(Strategy):
         # retorno que uma posição-alvo decidida na barra t de fato captura: open[t+1] -> open[t+2]
         fwd = (o.shift(-2) / o.shift(-1) - 1.0)
         hours = bars.index.hour.to_numpy()
+        # o retorno "futuro" da linha t usa open[t+1] e open[t+2]: as duas últimas linhas do treino
+        # olhariam para o teste; cortam-se 2 linhas do fim da janela de ajuste
         sl = fit_slice if fit_slice is not None else slice(0, len(bars))
+        sl = slice(sl.start or 0, max((sl.stop if sl.stop is not None else len(bars)) - 2, sl.start or 0))
         df = pd.DataFrame({"h": hours[sl], "r": fwd.to_numpy()[sl]}).dropna()
         by_hour = df.groupby("h")["r"].mean().sort_values()
         if len(by_hour) < 2 * k:

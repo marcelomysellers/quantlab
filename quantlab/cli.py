@@ -37,6 +37,7 @@ def main():
     t.add_argument("--train-months", type=int, default=12)
     t.add_argument("--test-months", type=int, default=3)
     t.add_argument("--min-trades", type=int, default=10)
+    t.add_argument("--wf-mode", default="best", choices=["best", "mean"], help="best: melhor parâmetro do treino; mean: média da grade, sem seleção")
     t.add_argument("--null-sims", type=int, default=300)
     t.add_argument("--stress-sims", type=int, default=40)
     t.add_argument("--run-id", default=None)
@@ -65,7 +66,7 @@ def main():
         from quantlab.tournament import run_tournament
         run_id = a.run_id or time.strftime("%Y%m%d-%H%M%S")
         out = os.path.join(ROOT, "results", "runs", run_id)
-        cfg = WFConfig(train_months=a.train_months, test_months=a.test_months, min_trades=a.min_trades)
+        cfg = WFConfig(train_months=a.train_months, test_months=a.test_months, min_trades=a.min_trades, mode=a.wf_mode)
         run_tournament(a.symbol, a.tfs.split(","), a.strategies.split(","), a.start, a.end, cfg, out,
                        n_null=a.null_sims, n_stress=a.stress_sims)
         if a.publish:
@@ -92,7 +93,8 @@ def publish_run(run_dir: str) -> str:
         if os.path.isfile(mp):
             m = json.load(open(mp))
             runs.append({"id": d, "symbol": m["symbol"], "instrument": m["instrument"], "start": m["start"], "end": m["end"],
-                         "tfs": m["tfs"], "generated_at": m["generated_at"]})
+                         "tfs": m["tfs"], "generated_at": m["generated_at"], "method_version": m.get("method_version", 1),
+                         "wf_mode": m.get("wf", {}).get("mode", "best")})
     runs.sort(key=lambda r: r["generated_at"], reverse=True)
     with open(os.path.join(results_dir, "index.json"), "w") as f:
         json.dump(runs, f, indent=1)

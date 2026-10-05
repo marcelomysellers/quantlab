@@ -1,5 +1,19 @@
 [
  {
+  "id": "btc-bitstamp-2020-2026",
+  "symbol": "BTCUSD-BITSTAMP",
+  "instrument": "Bitcoin / USD (Bitstamp)",
+  "start": "2020-01-01",
+  "end": "2026-10-01",
+  "tfs": [
+   "1d",
+   "4h",
+   "1h",
+   "15m"
+  ],
+  "generated_at": "2026-10-05T23:00:32.282479+00:00"
+ },
+ {
   "id": "btc-2017-2019",
   "symbol": "BTCUSD",
   "instrument": "Bitcoin / USD",

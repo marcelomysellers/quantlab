@@ -43,3 +43,6 @@
 [ 1m] donchian           sharpe=-9.31 cagr=-99.8% mdd=-100.0% trades= 5491 p_null=1.000 dsr=0.00 -> reprovada (20.8s)
 [ 1m] bollinger_mr       sharpe=-14.43 cagr=-100.0% mdd=-100.0% trades= 7504 p_null=1.000 dsr=0.00 -> reprovada (25.3s)
 [ 1m] rsi_mr             sharpe=-14.35 cagr=-99.4% mdd=-100.0% trades= 4278 p_null=1.000 dsr=0.00 -> reprovada (18.8s)
+[ 1m] hour_seasonality   sharpe=-4.40 cagr=-74.7% mdd=-94.0% trades= 1732 p_null=0.480 dsr=0.00 -> reprovada (23.3s)
+torneio concluído em 314s -> /home/user/quant-lab/results/runs/btc-2017-2019
+publicado em /home/user/quant-lab/web/public/results/latest

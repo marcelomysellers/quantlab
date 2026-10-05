@@ -41,3 +41,7 @@
 [ 1m] sma_cross          sharpe=-5.38 cagr=-100.0% mdd=-100.0% trades=13689 p_null=1.000 dsr=0.00 -> reprovada (106.6s)
 [ 1m] tsmom              sharpe=-33.61 cagr=-100.0% mdd=-100.0% trades=155598 p_null=0.010 dsr=0.00 -> reprovada (202.7s)
 [ 1m] donchian           sharpe=-10.53 cagr=-100.0% mdd=-100.0% trades=20966 p_null=1.000 dsr=0.00 -> reprovada (76.6s)
+[ 1m] bollinger_mr       sharpe=-14.61 cagr=-100.0% mdd=-100.0% trades=28874 p_null=1.000 dsr=0.00 -> reprovada (92.6s)
+[ 1m] rsi_mr             sharpe=-4.92 cagr=-65.7% mdd=-100.0% trades= 3884 p_null=0.010 dsr=0.00 -> reprovada (76.9s)
+[ 1m] hour_seasonality   sharpe=-5.37 cagr=-71.0% mdd=-100.0% trades= 6390 p_null=0.370 dsr=0.00 -> reprovada (210.9s)
+torneio concluído em 1289s -> /home/user/quant-lab/results/runs/btc-binance-2018-2026

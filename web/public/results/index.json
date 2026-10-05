@@ -1,5 +1,23 @@
 [
  {
+  "id": "btc-binance-2018-2026",
+  "symbol": "BTCUSDT-BINANCE",
+  "instrument": "Bitcoin / USDT (Binance spot)",
+  "start": "2018-01-01",
+  "end": "2026-10-01",
+  "tfs": [
+   "1d",
+   "4h",
+   "1h",
+   "15m",
+   "5m",
+   "1m"
+  ],
+  "generated_at": "2026-10-05T23:21:56.607383+00:00",
+  "method_version": 2,
+  "wf_mode": "best"
+ },
+ {
   "id": "btc-bitstamp-2020-2026-media",
   "symbol": "BTCUSD-BITSTAMP",
   "instrument": "Bitcoin / USD (Bitstamp)",

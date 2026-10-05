@@ -54,14 +54,29 @@ def _downsample(values: np.ndarray, max_points: int) -> np.ndarray:
     return np.unique(np.linspace(0, n - 1, max_points).astype(int))
 
 
-def verdict_for(m_base: dict, m_pess: dict, null_p: float, dsr_v: float, is_benchmark: bool) -> tuple[str, list[dict]]:
+def fold_concentration(fold_returns: list[float]) -> float:
+    """Fração do retorno OOS total que vem da melhor janela (1.0 = tudo de uma janela só).
+    Só faz sentido quando o total é positivo; caso contrário devolve 0."""
+    if not fold_returns:
+        return 0.0
+    total = float(np.sum(fold_returns))
+    if total <= 0:
+        return 0.0
+    return float(max(fold_returns) / total)
+
+
+def verdict_for(m_base: dict, m_pess: dict, null_p: float, dsr_v: float, is_benchmark: bool,
+                concentration: float = 0.0, dsr_global: float | None = None) -> tuple[str, list[dict]]:
     checks = [
         {"id": "sharpe_pos", "label": "Sharpe OOS (base) > 0.5", "ok": m_base["sharpe"] > 0.5, "value": round(m_base["sharpe"], 2)},
         {"id": "null", "label": "Bate entradas aleatórias (p < 0.05)", "ok": null_p < 0.05, "value": round(null_p, 3)},
-        {"id": "dsr", "label": "Sharpe deflacionado > 0.90", "ok": dsr_v > 0.90, "value": round(dsr_v, 3)},
+        {"id": "dsr", "label": "Sharpe deflacionado > 0.90 (tentativas da família)", "ok": dsr_v > 0.90, "value": round(dsr_v, 3)},
         {"id": "pess", "label": "Sobrevive ao cenário pessimista (Sharpe > 0)", "ok": m_pess["sharpe"] > 0, "value": round(m_pess["sharpe"], 2)},
         {"id": "trades", "label": "Pelo menos 30 trades OOS", "ok": m_base["n_trades"] >= 30, "value": m_base["n_trades"]},
+        {"id": "conc", "label": "Nenhuma janela responde por mais de 60% do retorno", "ok": concentration <= 0.60, "value": round(concentration, 2)},
     ]
+    if dsr_global is not None:
+        checks.append({"id": "dsr_global", "label": "Sharpe deflacionado > 0.90 (todas as configurações do torneio)", "ok": dsr_global > 0.90, "value": round(dsr_global, 3)})
     if is_benchmark:
         return "referencia", checks
     if all(c["ok"] for c in checks):
@@ -119,7 +134,8 @@ def evaluate_entry(strategy, bars: pd.DataFrame, ctx: Context, wf: WFResult, cfg
     dsr_v = dsr(sr_bar, len(d), mb["skew"], mb["kurtosis"], n_trials, var_sr)
     ci_lo, ci_hi = block_bootstrap_sharpe(d, 365.25, n_boot=200)
 
-    verdict, checks = verdict_for(mb, metrics["pessimista"], null["p_value"], dsr_v, strategy.is_benchmark)
+    conc = fold_concentration([f.oos_return for f in wf.folds])
+    verdict, checks = verdict_for(mb, metrics["pessimista"], null["p_value"], dsr_v, strategy.is_benchmark, conc)
 
     # séries para o frontend (resolução diária, base comum entre timeframes)
     eq = np.cumprod(1.0 + daily["base"].to_numpy())
@@ -170,6 +186,8 @@ def evaluate_entry(strategy, bars: pd.DataFrame, ctx: Context, wf: WFResult, cfg
         "gross_total": gross_total, "cost_total": cost_total,
         "null_p": null["p_value"], "null_mean": null.get("null_mean"), "null_p95": null.get("null_p95"),
         "dsr": dsr_v, "n_trials": n_trials, "sharpe_ci90": [ci_lo, ci_hi],
+        "fold_concentration": conc, "oos_return_ex_best_fold": float(np.prod([1 + r for r in sorted([f.oos_return for f in wf.folds])[:-1]]) - 1) if len(wf.folds) > 1 else 0.0,
+        "_sr_bar": sr_bar, "_n_days": int(len(d)), "_config_sr": list(wf.config_sr_daily),
         "stress_sharpe_median": float(np.median([s["sharpe"] for s in stress])) if stress else None,
         "stress_sharpe_p10": float(np.percentile([s["sharpe"] for s in stress], 10)) if stress else None,
         "fold_returns": [f["oos_return"] for f in folds], "fold_sharpes": [f["oos_sharpe"] for f in folds],
@@ -247,6 +265,24 @@ def run_tournament(symbol: str, tfs: list[str], strategy_names: list[str], start
             m = row["metrics"]["base"]
             log(f"[{tf:>3}] {name:<18} sharpe={m['sharpe']:+.2f} cagr={m['cagr']:+.1%} mdd={m['max_drawdown']:.1%} "
                 f"trades={m['n_trades']:>5} p_null={row['null_p']:.3f} dsr={row['dsr']:.2f} -> {row['verdict']} ({time.time()-t0:.1f}s)")
+
+    # DSR global: deflaciona cada Sharpe pelo número TOTAL de configurações testadas no torneio
+    # (todas as famílias e timeframes), com a variância dos Sharpes de todas elas.
+    all_sr = [x for r in rows if not r["is_benchmark"] for x in r["_config_sr"]]
+    n_total = max(len(all_sr), 1)
+    var_all = float(np.var(all_sr)) if len(all_sr) > 1 else 0.0
+    for r in rows:
+        m = r["metrics"]["base"]
+        r["dsr_global"] = dsr(r["_sr_bar"], r["_n_days"], m["skew"], m["kurtosis"], n_total, var_all)
+        r["n_trials_global"] = n_total
+        d = details[r["id"]]
+        d["dsr_global"], d["n_trials_global"] = r["dsr_global"], n_total
+        verdict, checks = verdict_for(m, r["metrics"]["pessimista"], r["null_p"], r["dsr"], r["is_benchmark"], r["fold_concentration"], r["dsr_global"])
+        r["verdict"], d["verdict"], d["checks"] = verdict, verdict, checks
+        for k in ("_sr_bar", "_n_days", "_config_sr"):
+            r.pop(k, None); d.pop(k, None)
+        with open(os.path.join(out_dir, "entries", f"{r['id']}.json"), "w") as f:
+            json.dump(d, f, default=_json_default)
 
     rows.sort(key=lambda r: r["metrics"]["base"]["sharpe"], reverse=True)
     for i, r in enumerate(rows):

@@ -17,6 +17,7 @@ export interface Row {
   stress_sharpe_median: number | null; stress_sharpe_p10: number | null;
   fold_returns: number[]; fold_sharpes: number[]; params_by_fold: (Record<string, unknown> | null)[];
   oos_range: [string, string]; spark: number[]; rank: number;
+  fold_concentration?: number; oos_return_ex_best_fold?: number; dsr_global?: number; n_trials_global?: number;
 }
 
 export interface CurvePoint { t: number; eq: number; bh: number; dd: number; pess: number; opt: number; ov?: number }

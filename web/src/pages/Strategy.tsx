@@ -99,7 +99,8 @@ export function Strategy({ id, manifest, themeKey }: { id: string; manifest: Man
         <Tile label="Drawdown máximo" value={pct(m.max_drawdown)} delta={`comprar e segurar: ${pct(d.bh.max_drawdown)}`} cls="neg" />
         <Tile label="Trades OOS" value={int(m.n_trades)} delta={`${num(m.trades_per_year, 0)} por ano · acerto ${pct(m.win_rate, 0)}`} />
         <Tile label="p contra entradas aleatórias" value={num(d.null_p, 3)} delta={`${d.null.n_sims} simulações com a mesma exposição`} cls={d.null_p < 0.05 ? "pos" : ""} />
-        <Tile label="Sharpe deflacionado (DSR)" value={num(d.dsr, 2)} delta={`corrigido por ${d.n_trials} tentativas`} cls={d.dsr > 0.9 ? "pos" : ""} />
+        <Tile label="Sharpe deflacionado (DSR)" value={num(d.dsr, 2)} delta={d.dsr_global != null ? `família: ${d.n_trials} tentativas · torneio inteiro (${d.n_trials_global}): ${num(d.dsr_global, 2)}` : `corrigido por ${d.n_trials} tentativas`} cls={d.dsr > 0.9 ? "pos" : ""} />
+        {d.fold_concentration != null && <Tile label="Retorno na melhor janela" value={pct(d.fold_concentration, 0)} delta={`sem a melhor janela: ${pct(d.oos_return_ex_best_fold)}`} cls={d.fold_concentration > 0.6 ? "neg" : ""} />}
       </div>
 
       <div className="card">

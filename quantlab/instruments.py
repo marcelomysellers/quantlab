@@ -60,4 +60,26 @@ WIN = Instrument(
     always_open=False,
 )
 
-INSTRUMENTS = {i.symbol: i for i in (BTCUSD, WIN)}
+BTCUSD_BITSTAMP = Instrument(
+    symbol="BTCUSD-BITSTAMP",
+    name="Bitcoin / USD (Bitstamp)",
+    tick_size=1.0,
+    point_value=1.0,
+    minutes_per_day=1440.0,
+    trading_days_per_year=365.25,
+    quote_currency="USD",
+    always_open=True,
+)
+
+BTCUSDT_BINANCE = Instrument(
+    symbol="BTCUSDT-BINANCE",
+    name="Bitcoin / USDT (Binance spot)",
+    tick_size=0.01,
+    point_value=1.0,
+    minutes_per_day=1440.0,
+    trading_days_per_year=365.25,
+    quote_currency="USDT",
+    always_open=True,
+)
+
+INSTRUMENTS = {i.symbol: i for i in (BTCUSD, BTCUSD_BITSTAMP, BTCUSDT_BINANCE, WIN)}

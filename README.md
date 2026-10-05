@@ -24,10 +24,13 @@ quantlab/
     walkforward.py      janelas rolantes, seleção no treino, curva OOS costurada, curva de vitrine
   tournament.py         tudo x tudo, 3 cenários de custo, estresse de fills, duelos, JSON
   cli.py
+  research/signal_scan.py  IC por feature e horizonte, permutação circular, estabilidade por ano (mede sinais, não estratégias)
 tests/test_engine.py    sanidade do motor + teste de lookahead de todas as estratégias
 web/                    frontend Vite + React + lightweight-charts
 results/runs/<id>/      saída de cada torneio (ignorado pelo git)
-web/public/results/     último torneio publicado, versionado para o frontend abrir sem rodar nada
+web/public/results/     torneios publicados (index.json + um diretório por torneio), versionados para o frontend abrir sem rodar nada
+research/               varreduras de sinais (signal_scan_coinmetrics.md) e levantamento de fontes públicas (fontes.md)
+council/                o conselho: cartas das pessoas da Renaissance (fontes públicas), brief, pareceres e atas por sessão
 ```
 
 ## Rodar
@@ -43,11 +46,22 @@ git clone --filter=blob:none --no-checkout --depth 1 https://github.com/Zombie-3
 python -m quantlab.cli ingest-bitfinex
 python -m quantlab.cli quality
 
-# dados: opção B (sua máquina) Binance perpétuo 1 min + funding, de 2020 em diante
+# dados: opção B (qualquer lugar) Bitstamp 1 min 2012-hoje, atualizado diariamente
+git clone --filter=blob:none --no-checkout --depth 1 https://github.com/ff137/bitstamp-btcusd-minute-data data/external/probe-bitstamp-btcusd-minute-data
+(cd data/external/probe-bitstamp-btcusd-minute-data && git checkout HEAD -- data/historical data/updates data/provenance)
+python -m quantlab.cli ingest-bitstamp
+
+# dados: opção C (qualquer lugar) Binance spot 1 min 2017-hoje em Parquet via Git LFS
+git clone --filter=blob:none --no-checkout --depth 1 https://github.com/Speirsy11/crypto-dataset data/external/probe-crypto-dataset
+(cd data/external/probe-crypto-dataset && git checkout HEAD -- $(git ls-tree -r HEAD --name-only | grep "interval_id=1m/symbol_id=BTCUSDT/") && git lfs pull --include "data/interval_id=1m/symbol_id=BTCUSDT/**")
+python -m quantlab.cli ingest-binance-github
+
+# dados: opção D (sua máquina) Binance perpétuo 1 min com taker-buy, trades e funding
 python -m quantlab.data.binance --symbol BTCUSDT --market um --start 2020-01
 
 # torneio (5 min para 6 timeframes em 3 anos de 1 minuto) e publicação para o frontend
-python -m quantlab.cli tournament --tfs 1d,4h,1h,15m,5m,1m --start 2017-01-01 --end 2020-01-01 --publish
+python -m quantlab.cli tournament --symbol BTCUSDT-BINANCE --tfs 1d,4h,1h,15m,5m,1m --start 2018-01-01 --end 2026-10-01 --publish
+python -m quantlab.cli publish <run_id>      # republica um torneio já rodado; o frontend lista todos em web/public/results/index.json
 
 # frontend
 cd web && npm install && npm run dev      # http://localhost:5173

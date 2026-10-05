@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quantlab"
+version = "0.1.0"
+description = "Laboratório de métodos quantitativos: backtests honestos, torneio de estratégias e frontend visual"
+requires-python = ">=3.11"
+dependencies = ["numpy>=2.0", "pandas>=2.2", "pyarrow>=17", "scipy>=1.13", "requests>=2.32"]
+
+[tool.setuptools.packages.find]
+include = ["quantlab*"]

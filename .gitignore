@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+data/raw/
+data/external/
+data/parquet/
+results/runs/
+web/node_modules/
+web/dist/
+web/public/results/
+.DS_Store
+quantlab.egg-info/

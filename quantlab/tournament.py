@@ -84,7 +84,9 @@ def verdict_for(m_base: dict, m_pess: dict, null_p: float, dsr_v: float, is_benc
         return "referencia", checks
     if all(c["ok"] for c in checks):
         return "aprovada", checks
-    if m_base["sharpe"] > 0 and null_p < 0.15 and m_base["n_trades"] >= 30:
+    ex5_ok = sharpe_ex_top5 is None or sharpe_ex_top5 > 0
+    if (m_base["sharpe"] > 0.3 and m_base["cagr"] > 0 and null_p < 0.15 and m_base["n_trades"] >= 30
+            and concentration <= 0.60 and ex5_ok):
         return "promissora", checks
     return "reprovada", checks
 
@@ -278,12 +280,13 @@ def run_tournament(symbol: str, tfs: list[str], strategy_names: list[str], start
     # (todas as famílias e timeframes), com a variância dos Sharpes de todas elas.
     all_sr = [x for r in rows if not r["is_benchmark"] for x in r["_config_sr"]]
     n_total = max(len(all_sr), 1)
-    # variância dos Sharpes sob o nulo (deslocamentos), em unidades diárias: é o que o acaso produz
-    null_pool = [x / np.sqrt(365.25) for r in rows if not r["is_benchmark"] for x in r["_null_sharpes"]]
-    var_all = float(np.var(null_pool)) if len(null_pool) > 1 else (float(np.var(all_sr)) if len(all_sr) > 1 else 0.0)
     for r in rows:
         m = r["metrics"]["base"]
-        r["dsr_global"] = dsr(r["_sr_bar"], r["_n_days"], m["skew"], m["kurtosis"], n_total, var_all)
+        # variância do PRÓPRIO nulo da entrada (deslocamentos), em unidades diárias: a dispersão que o
+        # acaso produz para esta exposição e este custo; N = tudo que o torneio tentou
+        own = np.asarray(r["_null_sharpes"], dtype=float) / np.sqrt(inst.trading_days_per_year)
+        var_own = float(np.var(own)) if len(own) > 1 else (float(np.var(all_sr)) if len(all_sr) > 1 else 0.0)
+        r["dsr_global"] = dsr(r["_sr_bar"], r["_n_days"], m["skew"], m["kurtosis"], n_total, var_own)
         r["n_trials_global"] = n_total
         d = details[r["id"]]
         d["dsr_global"], d["n_trials_global"] = r["dsr_global"], n_total
@@ -321,3 +324,41 @@ def run_tournament(symbol: str, tfs: list[str], strategy_names: list[str], start
         json.dump(manifest, f, default=_json_default)
     log(f"torneio concluído em {time.time()-t_all:.0f}s -> {out_dir}")
     return manifest
+
+
+def reverdict(run_dir: str, days_per_year: float = 365.25) -> list[dict]:
+    """Recalcula concentração por janela, Sharpe sem os 5 melhores dias, DSR global e vereditos a partir
+    dos JSON gravados. Serve para aplicar o método atual a torneios antigos sem rodá-los de novo."""
+    lb_path = os.path.join(run_dir, "leaderboard.json")
+    rows = json.load(open(lb_path))
+    n_total = max(sum(r["n_trials"] for r in rows if not r["is_benchmark"]), 1)
+    for r in rows:
+        ep = os.path.join(run_dir, "entries", f"{r['id']}.json")
+        d = json.load(open(ep))
+        m = r["metrics"]["base"]
+        folds = r["fold_returns"]
+        conc = fold_concentration(folds)
+        daily = np.sort(np.asarray(d["daily"]["r"], dtype=float))
+        ex5 = sharpe(daily[:-5], days_per_year) if len(daily) > 30 else 0.0
+        sr_bar = m["sharpe"] / np.sqrt(days_per_year)
+        own = np.asarray(d["null"]["sharpes"], dtype=float) / np.sqrt(days_per_year)
+        var_own = float(np.var(own)) if len(own) > 1 else 0.0
+        dsr_g = dsr(sr_bar, int(m["n_days"]), m["skew"], m["kurtosis"], n_total, var_own)
+        verdict, checks = verdict_for(m, r["metrics"]["pessimista"], r["null_p"], r["dsr"], r["is_benchmark"], conc, dsr_g, ex5)
+        upd = {"fold_concentration": conc, "sharpe_ex_top5_days": float(ex5), "dsr_global": dsr_g, "n_trials_global": n_total,
+               "oos_return_ex_best_fold": float(np.prod([1 + x for x in sorted(folds)[:-1]]) - 1) if len(folds) > 1 else 0.0,
+               "verdict": verdict}
+        r.update(upd)
+        d.update(upd)
+        d["checks"] = checks
+        with open(ep, "w") as f:
+            json.dump(d, f, default=_json_default)
+    with open(lb_path, "w") as f:
+        json.dump(rows, f, default=_json_default)
+    mp = os.path.join(run_dir, "manifest.json")
+    man = json.load(open(mp))
+    man["method_version"] = 2
+    man["reverdict"] = True
+    with open(mp, "w") as f:
+        json.dump(man, f, default=_json_default)
+    return rows

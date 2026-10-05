@@ -38,3 +38,6 @@
 [ 5m] hour_seasonality   sharpe=-5.28 cagr=-71.9% mdd=-100.0% trades= 6293 p_null=0.200 dsr=0.00 -> reprovada (58.0s)
 [ 1m] buy_hold           sharpe=+0.97 cagr=+49.5% mdd=-77.5% trades=    0 p_null=1.000 dsr=1.00 -> referencia (24.9s)
 [ 1m] random_entry       sharpe=-11.86 cagr=-100.0% mdd=-100.0% trades=29253 p_null=1.000 dsr=0.00 -> referencia (77.1s)
+[ 1m] sma_cross          sharpe=-5.38 cagr=-100.0% mdd=-100.0% trades=13689 p_null=1.000 dsr=0.00 -> reprovada (106.6s)
+[ 1m] tsmom              sharpe=-33.61 cagr=-100.0% mdd=-100.0% trades=155598 p_null=0.010 dsr=0.00 -> reprovada (202.7s)
+[ 1m] donchian           sharpe=-10.53 cagr=-100.0% mdd=-100.0% trades=20966 p_null=1.000 dsr=0.00 -> reprovada (76.6s)

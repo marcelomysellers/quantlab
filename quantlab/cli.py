@@ -46,6 +46,10 @@ def main():
     pb = sub.add_parser("publish", help="publica um torneio já rodado em web/public/results/<run_id>")
     pb.add_argument("run_id")
 
+    rv = sub.add_parser("reverdict", help="recalcula concentração, DSR global e vereditos de um torneio já rodado e republica")
+    rv.add_argument("run_id")
+    rv.add_argument("--days-per-year", type=float, default=365.25)
+
     a = ap.parse_args()
     if a.cmd == "ingest-bitfinex":
         from quantlab.data.bitfinex_github import ingest
@@ -73,6 +77,13 @@ def main():
             print("publicado em", publish_run(out))
     elif a.cmd == "publish":
         print("publicado em", publish_run(os.path.join(ROOT, "results", "runs", a.run_id)))
+    elif a.cmd == "reverdict":
+        from quantlab.tournament import reverdict
+        run_dir = os.path.join(ROOT, "results", "runs", a.run_id)
+        rows = reverdict(run_dir, a.days_per_year)
+        from collections import Counter
+        print(dict(Counter(r["verdict"] for r in rows)))
+        print("publicado em", publish_run(run_dir))
 
 
 def publish_run(run_dir: str) -> str:

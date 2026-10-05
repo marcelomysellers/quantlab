@@ -76,7 +76,7 @@ cd web && npm install && npm run dev      # http://localhost:5173
 5. **O nulo certo.** 300 versões da própria estratégia com as posições deslocadas circularmente no tempo: mesma exposição, mesmos trades e durações, mesmos custos; só o alinhamento com o preço é destruído. O p-valor é a fração que iguala ou supera o Sharpe real.
 6. **Contar as tentativas.** Sharpe deflacionado (Bailey & López de Prado, 2014) pela grade da família e, no veredito, por TODAS as configurações do torneio com a variância do nulo. `research/hipoteses.md` registra cada hipótese testada; a contagem nunca diminui. Estatísticas em retornos diários, base comum entre timeframes.
 7. **Concentração.** Nenhuma janela pode responder por mais de 60% do lucro e o Sharpe sem os 5 melhores dias tem que ser mais da metade do Sharpe. O walk-forward pode rodar em modo `--wf-mode mean` (média da grade, sem seleção).
-8. **Veredito.** Aprovada: tudo acima mais Sharpe OOS > 0,5, p < 0,05, Sharpe positivo no pessimista, 30+ trades. Promissora: Sharpe > 0, p < 0,15, 30+ trades. Reprovada: o resto.
+8. **Veredito.** Aprovada: tudo acima mais Sharpe OOS > 0,5, p < 0,05, Sharpe positivo no pessimista, 30+ trades. Promissora: Sharpe > 0,3 com CAGR positivo, p < 0,15, 30+ trades, sem concentração numa janela e Sharpe positivo sem os 5 melhores dias. Reprovada: o resto. `python -m quantlab.cli reverdict <run_id>` reaplica os critérios atuais a um torneio antigo.
 
 ## Resultados até agora
 

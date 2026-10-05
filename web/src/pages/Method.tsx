@@ -25,7 +25,7 @@ export function Method({ manifest }: { manifest: Manifest }) {
       <h3>7. Veredito</h3>
       <ul>
         <li><b>aprovada</b>: Sharpe OOS base &gt; 0,5, p contra aleatórias &lt; 0,05, DSR &gt; 0,90, Sharpe positivo no cenário pessimista, pelo menos 30 trades.</li>
-        <li><b>promissora</b>: Sharpe OOS positivo, p &lt; 0,15, pelo menos 30 trades. Vale investigar, não vale operar.</li>
+        <li><b>promissora</b>: Sharpe OOS &gt; 0,3 com CAGR positivo, p &lt; 0,15, pelo menos 30 trades, nenhuma janela com mais de 60% do lucro e Sharpe positivo sem os 5 melhores dias. Vale investigar, não vale operar.</li>
         <li><b>reprovada</b>: o resto. A maioria. É assim que deve ser.</li>
       </ul>
       <h3>Como adicionar uma estratégia</h3>

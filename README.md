@@ -27,6 +27,7 @@ quantlab/
 tests/test_engine.py    sanidade do motor + teste de lookahead de todas as estratégias
 web/                    frontend Vite + React + lightweight-charts
 results/runs/<id>/      saída de cada torneio (ignorado pelo git)
+web/public/results/     último torneio publicado, versionado para o frontend abrir sem rodar nada
 ```
 
 ## Rodar

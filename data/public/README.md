@@ -22,3 +22,12 @@ python -m quantlab.research.funding_study --confirm      # escreve research/fund
 ```
 
 O critério de sobrevivência está pré-registrado na linha H023 de `research/hipoteses.md`, antes de olhar o resultado.
+
+## Arquivos presentes
+
+| arquivo | fonte | período | uso |
+|---|---|---|---|
+| `BTCUSDT_funding_binance_zushen168_2025-08_2026-09.parquet` | [ZuShen168/funding_rate_data](https://github.com/ZuShen168/funding_rate_data), `data/funding/venue=binance/data.parquet`, commit e6a2d81 (2026-10-05) | 2025-08-21 a 2026-09-20, 1.116 pagamentos de 8 h (6% de carimbos faltantes) | leitura parcial da H023 (`research/funding_confirmacao_parcial.md`) e conferência cruzada do funding oficial quando ele chegar |
+| `BTCUSDT_funding_bybit_zushen168_2025-08_2026-09.parquet` | idem, `venue=bybit` | idem | conferência cruzada (correlação 0,51 com a Binance nos carimbos comuns) |
+
+Esses dois não substituem o fetcher: faltam 2024-01 a 2025-08, e o funding oficial da Binance é a fonte da confirmação pré-registrada.

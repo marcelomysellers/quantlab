@@ -202,9 +202,11 @@ def _table(L: list[str], header: list[str], rows: list[list[str]]) -> None:
         L.append("| " + " | ".join(r) + " |")
 
 
-def confirm(start: str = "2024-01-01", end: str | None = None, out_dir: str | None = None, n_null: int = 200) -> dict:
+def confirm(start: str = "2024-01-01", end: str | None = None, out_dir: str | None = None, n_null: int = 200,
+            funding_path: str | None = None, out_name: str = "funding_confirmacao.md", note: str | None = None) -> dict:
+    """`funding_path` troca a fonte do funding (padrão: load_funding); `note` entra logo abaixo do título (ex.: leitura parcial)."""
     out_dir = out_dir or os.path.join(ROOT, "research")
-    fr = load_funding("BTCUSDT", "binance")["funding_rate"]
+    fr = (pd.read_parquet(funding_path) if funding_path else load_funding("BTCUSDT", "binance"))["funding_rate"]
     fr = fr[~fr.index.duplicated()].sort_index()
     last = fr.index[-1]
     end = end or (last + pd.Timedelta(hours=8)).strftime("%Y-%m-%d")
@@ -221,8 +223,10 @@ def confirm(start: str = "2024-01-01", end: str | None = None, out_dir: str | No
         raise SystemExit("sem barras de 1 h da Binance (nem perpétuo em data/public, nem spot em data/parquet)")
     sym0, label0, b0 = sources[0]
     fr_w = fr[_window(fr.index, start, end)]
-    L = [f"# Confirmação fora da amostra do funding: {start} a {end}", "",
-         f"Funding oficial: {len(fr_w)} pagamentos na janela ({fr_w.index[0]:%Y-%m-%d} a {fr_w.index[-1]:%Y-%m-%d}), "
+    L = [f"# Confirmação fora da amostra do funding: {start} a {end}", ""]
+    if note:
+        L += [f"> {note}", ""]
+    L += [f"Funding ({os.path.basename(funding_path) if funding_path else 'load_funding'}): {len(fr_w)} pagamentos na janela ({fr_w.index[0]:%Y-%m-%d} a {fr_w.index[-1]:%Y-%m-%d}), "
          f"média {fr_w.mean()*1e4:.2f} bps por 8 h ({fr_w.mean()*3*365.25:.1%} ao ano). "
          f"Preço: {', '.join(f'{l} ({s}, {b.index[0]:%Y-%m-%d} a {b.index[-1]:%Y-%m-%d})' for s, l, b in sources)}. "
          f"Parâmetros da H023 fixos em 2020-2023: {HOLD_H} h, percentil {int(PCT_THR*100)} móvel de 90 dias. Nulo: {n_null} deslocamentos.", "",
@@ -250,9 +254,9 @@ def confirm(start: str = "2024-01-01", end: str | None = None, out_dir: str | No
     verdict, checks = confirm_verdict(results[label0])
     L += [f"## Veredito pré-registrado (preço {label0}, sem funding recebido): **{verdict}**", ""] + checks + [""]
     os.makedirs(out_dir, exist_ok=True)
-    with open(os.path.join(out_dir, "funding_confirmacao.md"), "w") as f:
+    with open(os.path.join(out_dir, out_name), "w") as f:
         f.write("\n".join(L))
-    return {"verdict": verdict, "checks": checks, "results": results, "events": ev}
+    return {"verdict": verdict, "checks": checks, "results": results, "events": ev, "path": os.path.join(out_dir, out_name)}
 
 
 def main(out_dir: str | None = None):
@@ -293,10 +297,13 @@ if __name__ == "__main__":
     ap.add_argument("--start", default="2024-01-01")
     ap.add_argument("--end", default=None, help="padrão: último funding disponível")
     ap.add_argument("--null-sims", type=int, default=200)
+    ap.add_argument("--funding", default=None, help="parquet de funding alternativo (index ts | funding_rate)")
+    ap.add_argument("--out-name", default="funding_confirmacao.md")
+    ap.add_argument("--note", default=None, help="aviso impresso abaixo do título (ex.: leitura parcial)")
     a = ap.parse_args()
     if a.confirm:
-        confirm(a.start, a.end, n_null=a.null_sims)
-        print(open(os.path.join(ROOT, "research", "funding_confirmacao.md")).read())
+        r = confirm(a.start, a.end, n_null=a.null_sims, funding_path=a.funding, out_name=a.out_name, note=a.note)
+        print(open(r["path"]).read())
     else:
         main()
         print(open(os.path.join(ROOT, "research", "funding.md")).read())

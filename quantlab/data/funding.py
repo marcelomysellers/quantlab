@@ -31,7 +31,17 @@ def ingest_all() -> list[str]:
 
 
 def load_funding(symbol: str = "BTCUSDT", exchange: str = "binance") -> pd.DataFrame:
-    return pd.read_parquet(os.path.join(OUT_DIR, f"{symbol}_funding_{exchange}.parquet"))
+    """Funding em data/parquet ({symbol}_funding_{exchange}) ou em data/public ({symbol}-BINANCE-UM_funding, do fetcher)."""
+    candidates = []
+    if exchange == "binance":   # o fetcher oficial (sua máquina) vem antes do dataset 2020-2023
+        candidates += [os.path.join(ROOT, "data", "public", f"{symbol}-BINANCE-UM_funding.parquet"),
+                       os.path.join(ROOT, "data", "public", f"{symbol}_funding.parquet"),
+                       os.path.join(OUT_DIR, f"{symbol}-BINANCE-UM_funding.parquet")]
+    candidates.append(os.path.join(OUT_DIR, f"{symbol}_funding_{exchange}.parquet"))
+    for p in candidates:
+        if os.path.exists(p):
+            return pd.read_parquet(p)
+    raise FileNotFoundError(f"funding de {symbol} não encontrado em {candidates}")
 
 
 if __name__ == "__main__":

@@ -94,7 +94,8 @@ cd web && npm install && npm run dev      # http://localhost:5173
 
 ```bash
 python -m quantlab.research.ic_panel            # painel de IC: BTC + 10 ativos, grava research/painel_ic.md e a aba Sinais
-python -m quantlab.research.funding_study       # funding como sinal, carry e custo (precisa do funding em data/parquet)
+python -m quantlab.research.funding_study       # funding como sinal, carry e custo (2020-2023)
+python -m quantlab.research.funding_study --confirm   # confirmação 2024+ da H023 com o funding oficial em data/public (ver data/public/README.md)
 python -m quantlab.research.cross_section       # resíduo de altcoins contra BTC
 ```
 

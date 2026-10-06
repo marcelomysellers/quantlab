@@ -20,20 +20,34 @@ CACHE_VERSION = 2          # muda quando o esquema das barras derivadas muda
 EXTRA_SUM_COLS = ("taker_buy_base", "trades", "quote_volume")
 
 
+PUBLIC_DIR = os.path.join(ROOT, "data", "public")
+
+
+def raw_source(symbol: str) -> tuple[str, int]:
+    """Caminho do bruto e sua resolução em minutos. Procura 1m e depois 1h, em data/parquet e data/public."""
+    for res, minutes in (("1m", 1), ("1h", 60)):
+        for d in (PARQUET_DIR, PUBLIC_DIR):
+            p = os.path.join(d, f"{symbol}_{res}_raw.parquet")
+            if os.path.exists(p):
+                return p, minutes
+    raise FileNotFoundError(f"nenhum {symbol}_1m_raw.parquet ou {symbol}_1h_raw.parquet em data/parquet ou data/public")
+
+
 def raw_path(symbol: str) -> str:
-    return os.path.join(PARQUET_DIR, f"{symbol}_1m_raw.parquet")
+    return raw_source(symbol)[0]
 
 
 def load_raw_1m(symbol: str) -> pd.DataFrame:
-    p = raw_path(symbol)
-    if not os.path.exists(p):
-        raise FileNotFoundError(f"{p} não existe; rode a ingestão (quantlab.data.bitfinex_github ou quantlab.data.binance)")
+    p, minutes = raw_source(symbol)
+    if minutes != 1:
+        raise FileNotFoundError(f"{symbol} só tem bruto de {minutes} min; use load_bars com timeframe >= 1h")
     return pd.read_parquet(p)
 
 
-def regularize_1m(raw: pd.DataFrame) -> pd.DataFrame:
-    """Grade completa de 1 minuto; minutos faltantes viram barras sintéticas."""
-    idx = pd.date_range(raw.index[0].floor("min"), raw.index[-1].floor("min"), freq="1min", tz="UTC")
+def regularize_1m(raw: pd.DataFrame, minutes: int = 1) -> pd.DataFrame:
+    """Grade completa na resolução do bruto; barras faltantes viram barras sintéticas."""
+    freq = f"{minutes}min"
+    idx = pd.date_range(raw.index[0].floor(freq), raw.index[-1].floor(freq), freq=freq, tz="UTC")
     df = raw.reindex(idx)
     synthetic = df["close"].isna()
     df["close"] = df["close"].ffill()
@@ -53,12 +67,22 @@ def _cache_valid(cache_path: str, source_path: str) -> bool:
     return os.path.exists(cache_path) and os.path.getmtime(cache_path) >= os.path.getmtime(source_path)
 
 
-def load_1m(symbol: str) -> pd.DataFrame:
-    p = os.path.join(PARQUET_DIR, f"{symbol}_1m_v{CACHE_VERSION}.parquet")
-    if _cache_valid(p, raw_path(symbol)):
-        return pd.read_parquet(p)
-    df = regularize_1m(load_raw_1m(symbol))
+def load_base(symbol: str) -> tuple[pd.DataFrame, int]:
+    """Grade regular na resolução do bruto (1m ou 1h) e essa resolução em minutos."""
+    src, minutes = raw_source(symbol)
+    p = os.path.join(PARQUET_DIR, f"{symbol}_{minutes}m_v{CACHE_VERSION}.parquet")
+    if _cache_valid(p, src):
+        return pd.read_parquet(p), minutes
+    df = regularize_1m(pd.read_parquet(src), minutes)
+    os.makedirs(PARQUET_DIR, exist_ok=True)
     df.to_parquet(p)
+    return df, minutes
+
+
+def load_1m(symbol: str) -> pd.DataFrame:
+    df, minutes = load_base(symbol)
+    if minutes != 1:
+        raise FileNotFoundError(f"{symbol} só tem bruto de {minutes} min")
     return df
 
 
@@ -90,7 +114,16 @@ def load_bars(symbol: str, tf: str, start: str | None = None, end: str | None = 
     if _cache_valid(p, raw_path(symbol)):
         df = pd.read_parquet(p)
     else:
-        df = resample(load_1m(symbol), tf)
+        base, minutes = load_base(symbol)
+        if TF_MINUTES[tf] < minutes:
+            raise ValueError(f"{symbol}: a fonte tem {minutes} min, não dá para montar {tf}")
+        if TF_MINUTES[tf] == minutes:
+            df = base.copy()
+            if "synthetic" in df:
+                df["open_synthetic"] = df["synthetic"]
+        else:
+            df = resample(base, tf)
+        os.makedirs(PARQUET_DIR, exist_ok=True)
         df.to_parquet(p)
     if start is not None:
         df = df[df.index >= pd.Timestamp(start, tz="UTC")]

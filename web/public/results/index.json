@@ -1,6 +1,6 @@
 [
  {
-  "id": "btc-bitstamp-reversao",
+  "id": "btc-bitstamp-2020-2026-media",
   "symbol": "BTCUSD-BITSTAMP",
   "instrument": "Bitcoin / USD (Bitstamp)",
   "start": "2020-01-01",
@@ -8,24 +8,26 @@
   "tfs": [
    "1d",
    "4h",
-   "1h"
+   "1h",
+   "15m"
   ],
-  "generated_at": "2026-10-05T23:43:40.949103+00:00",
+  "generated_at": "2026-10-06T00:19:47.752427+00:00",
   "method_version": 2,
-  "wf_mode": "best"
+  "wf_mode": "mean"
  },
  {
-  "id": "btc-binance-reversao",
-  "symbol": "BTCUSDT-BINANCE",
-  "instrument": "Bitcoin / USDT (Binance spot)",
-  "start": "2018-01-01",
+  "id": "btc-bitstamp-2020-2026-v2",
+  "symbol": "BTCUSD-BITSTAMP",
+  "instrument": "Bitcoin / USD (Bitstamp)",
+  "start": "2020-01-01",
   "end": "2026-10-01",
   "tfs": [
    "1d",
    "4h",
-   "1h"
+   "1h",
+   "15m"
   ],
-  "generated_at": "2026-10-05T23:43:20.632505+00:00",
+  "generated_at": "2026-10-06T00:17:11.160058+00:00",
   "method_version": 2,
   "wf_mode": "best"
  },
@@ -43,39 +45,7 @@
    "5m",
    "1m"
   ],
-  "generated_at": "2026-10-05T23:21:56.607383+00:00",
-  "method_version": 2,
-  "wf_mode": "best"
- },
- {
-  "id": "btc-bitstamp-2020-2026-media",
-  "symbol": "BTCUSD-BITSTAMP",
-  "instrument": "Bitcoin / USD (Bitstamp)",
-  "start": "2020-01-01",
-  "end": "2026-10-01",
-  "tfs": [
-   "1d",
-   "4h",
-   "1h",
-   "15m"
-  ],
-  "generated_at": "2026-10-05T23:14:46.179160+00:00",
-  "method_version": 2,
-  "wf_mode": "mean"
- },
- {
-  "id": "btc-bitstamp-2020-2026-v2",
-  "symbol": "BTCUSD-BITSTAMP",
-  "instrument": "Bitcoin / USD (Bitstamp)",
-  "start": "2020-01-01",
-  "end": "2026-10-01",
-  "tfs": [
-   "1d",
-   "4h",
-   "1h",
-   "15m"
-  ],
-  "generated_at": "2026-10-05T23:12:56.360649+00:00",
+  "generated_at": "2026-10-06T00:13:51.117363+00:00",
   "method_version": 2,
   "wf_mode": "best"
  },

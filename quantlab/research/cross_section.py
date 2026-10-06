@@ -55,8 +55,20 @@ def signals(opens: pd.DataFrame, btc: str = "BTCUSDT") -> dict[str, pd.DataFrame
     return {"r": r, "beta": beta, "resid": resid, "signals": sig, "alts": alts}
 
 
+def daily_ic(sig: pd.DataFrame, fwd_resid: pd.DataFrame, min_assets: int) -> pd.Series:
+    """Spearman por dia entre o sinal e o resíduo futuro, vetorizado (postos por linha entre os ativos válidos)."""
+    mask = sig.notna() & fwd_resid.notna()
+    a = sig.where(mask).rank(axis=1)
+    b = fwd_resid.where(mask).rank(axis=1)
+    n = mask.sum(axis=1)
+    am = a.sub(a.mean(axis=1), axis=0)
+    bm = b.sub(b.mean(axis=1), axis=0)
+    ic = (am * bm).sum(axis=1) / np.sqrt((am ** 2).sum(axis=1) * (bm ** 2).sum(axis=1))
+    return ic[n >= min_assets].dropna()
+
+
 def backtest(sig: pd.DataFrame, r: pd.DataFrame, beta: pd.DataFrame, resid: pd.DataFrame, alts: list[str],
-             cost_bps: float, btc: str = "BTCUSDT", min_assets: int = 6) -> dict:
+             cost_bps: float, btc: str = "BTCUSDT", min_assets: int = 6, with_ic: bool = True) -> dict:
     """Sinal observado na abertura de d (dados até open[d]); posição de open[d+1] a open[d+2]
     equivale a aplicar o retorno r[d+2]. Mantemos uma barra de folga para execução."""
     z = sig.sub(sig.mean(axis=1), axis=0).div(sig.std(axis=1), axis=0)
@@ -71,44 +83,40 @@ def backtest(sig: pd.DataFrame, r: pd.DataFrame, beta: pd.DataFrame, resid: pd.D
     gross = pnl_alts + pnl_hedge
     turnover = (w.diff().abs().sum(axis=1) + hedge.diff().abs()).fillna(0.0)
     net = gross - turnover * cost_bps / 1e4
-    # IC diário: sinal contra o resíduo futuro
-    fwd_resid = resid.shift(-2)
-    ics = []
-    for d in sig.index:
-        a, b_ = sig.loc[d].dropna(), fwd_resid.loc[d].dropna()
-        common = a.index.intersection(b_.index)
-        if len(common) >= min_assets:
-            ics.append((d, stats.spearmanr(a[common], b_[common]).statistic))
-    ic = pd.Series(dict(ics), dtype=float)
-    beta_expost = float(np.corrcoef(gross.dropna(), fwd[btc].reindex(gross.dropna().index).fillna(0))[0, 1]) if gross.notna().sum() > 30 else np.nan
+    ic = daily_ic(sig, resid.shift(-2), min_assets) if with_ic else pd.Series(dtype=float)
+    g = gross.dropna()
+    beta_expost = float(np.corrcoef(g, fwd[btc].reindex(g.index).fillna(0))[0, 1]) if len(g) > 30 else np.nan
     return {"net": net, "gross": gross, "turnover": turnover, "ic": ic, "beta_expost_corr": beta_expost}
 
 
 def summarize(res: dict, start: str, end: str) -> dict:
     sl = lambda s: s[(s.index >= pd.Timestamp(start, tz="UTC")) & (s.index < pd.Timestamp(end, tz="UTC"))]
-    net, ic, to = sl(res["net"]).dropna(), sl(res["ic"]).dropna(), sl(res["turnover"])
+    net, to = sl(res["net"]).dropna(), sl(res["turnover"])
+    ic = sl(res["ic"]).dropna() if len(res["ic"]) else res["ic"]
     if len(net) < 60:
         return {}
     eq = np.cumprod(1 + net.to_numpy())
     yrs = len(net) / 365.25
-    return {"sharpe": round(sharpe(net.to_numpy(), 365.25), 2), "cagr": round(float(eq[-1] ** (1 / yrs) - 1), 4),
-            "mdd": round(max_drawdown(eq)[0], 4), "ic_mean": round(float(ic.mean()), 4),
-            "ic_t": round(float(ic.mean() / (ic.std(ddof=1) / np.sqrt(len(ic)))), 2), "n_days": int(len(net)),
-            "turnover_day": round(float(to.mean()), 3)}
+    out = {"sharpe": round(sharpe(net.to_numpy(), 365.25), 2), "cagr": round(float(eq[-1] ** (1 / yrs) - 1), 4),
+           "mdd": round(max_drawdown(eq)[0], 4), "n_days": int(len(net)), "turnover_day": round(float(to.mean()), 3)}
+    if len(ic) > 10:
+        out.update({"ic_mean": round(float(ic.mean()), 4), "ic_t": round(float(ic.mean() / (ic.std(ddof=1) / np.sqrt(len(ic)))), 2)})
+    return out
 
 
 def shuffle_null(sig: pd.DataFrame, r, beta, resid, alts, cost_bps, start, end, n: int = 200, seed: int = 0) -> list[float]:
+    """Embaralha o sinal entre os ativos válidos de cada dia; mede só o Sharpe líquido no treino."""
     rng = np.random.default_rng(seed)
-    out = []
     vals = sig.to_numpy()
+    valid = [np.where(~np.isnan(row))[0] for row in vals]
+    out = []
     for _ in range(n):
         shuffled = vals.copy()
-        for i in range(len(shuffled)):
-            m = ~np.isnan(shuffled[i])
-            if m.sum() > 1:
-                shuffled[i, m] = rng.permutation(shuffled[i, m])
+        for i, idx in enumerate(valid):
+            if len(idx) > 1:
+                shuffled[i, idx] = vals[i, idx][rng.permutation(len(idx))]
         s2 = pd.DataFrame(shuffled, index=sig.index, columns=sig.columns)
-        res = backtest(s2, r, beta, resid, alts, cost_bps)
+        res = backtest(s2, r, beta, resid, alts, cost_bps, with_ic=False)
         st = summarize(res, start, end)
         out.append(st.get("sharpe", np.nan))
     return out
